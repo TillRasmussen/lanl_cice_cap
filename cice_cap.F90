@@ -164,26 +164,26 @@ module cice_cap_mod
 
     call CICE_Initialize(mpi_comm)
 
-    call CICE_AdvertiseFields(importState, import_from_atmos, rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_AdvertiseFields(importState, import_from_ocean, rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_AdvertiseFields(exportState, export_to_atmos, rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_AdvertiseFields(exportState, export_to_ocean, rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+    !call CICE_AdvertiseFields(importState, import_from_atmos, rc)
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
+    !call CICE_AdvertiseFields(importState, import_from_ocean, rc)
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
+    !call CICE_AdvertiseFields(exportState, export_to_atmos, rc)
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
+    !call CICE_AdvertiseFields(exportState, export_to_ocean, rc)
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
 
     write(*,*) '----- CICE initialization phase 1 completed'
 
@@ -205,7 +205,7 @@ module cice_cap_mod
     
     rc = ESMF_SUCCESS
 
-    ! We can check if npet is 24 or some other value to make sure
+    ! We can check if npet is 4 or some other value to make sure
     ! CICE is configured to run on the correct number of processors.
 
     ! create a Grid object for Fields
@@ -222,26 +222,26 @@ module cice_cap_mod
 
     gridOut = gridIn ! for now out same as in
 
-    call CICE_RealizeFields(importState, gridIn, import_from_atmos, "Atmos import", rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_RealizeFields(importState, gridIn, import_from_ocean, "Ocean import", rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_RealizeFields(exportState, gridOut, export_to_atmos, "Atmos export", rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_RealizeFields(exportState, gridOut, export_to_ocean, "Ocean export", rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+    !call CICE_RealizeFields(importState, gridIn, import_from_atmos, "Atmos import", rc)
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
+    !call CICE_RealizeFields(importState, gridIn, import_from_ocean, "Ocean import", rc)
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
+    !call CICE_RealizeFields(exportState, gridOut, export_to_atmos, "Atmos export", rc)
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
+    !call CICE_RealizeFields(exportState, gridOut, export_to_ocean, "Ocean export", rc)
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
 
     write(*,*) '----- CICE initialization phase 2 completed'
 
@@ -307,6 +307,7 @@ module cice_cap_mod
     type(ESMF_TimeInterval)                :: timeStep
 
     rc = ESMF_SUCCESS
+    write(*,*) 'CICE: --- run phase called --- 1'
     
     ! query the Component for its clock, importState and exportState
     call ESMF_GridCompGet(gcomp, clock=clock, importState=importState, &
@@ -346,25 +347,27 @@ module cice_cap_mod
       return  ! bail out
 
 
-    call NUOPC_StateWrite(importState, filePrefix='field_ice_import_', &
-      timeslice=import_slice, rc=rc) 
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    import_slice = import_slice + 1
+    !call NUOPC_StateWrite(importState, filePrefix='field_ice_import_', &
+    !  timeslice=import_slice, rc=rc) 
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
+    !import_slice = import_slice + 1
 
+    write(*,*) 'CICE: --- run phase called --- 2'
     call CICE_Run
+    write(*,*) 'CICE: --- run phase called --- 3'
 
-    call NUOPC_StateWrite(exportState, filePrefix='field_ice_export_', &
-      timeslice=export_slice, rc=rc) 
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    export_slice = export_slice + 1
+    !call NUOPC_StateWrite(exportState, filePrefix='field_ice_export_', &
+    !  timeslice=export_slice, rc=rc) 
+    !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    !  line=__LINE__, &
+    !  file=__FILE__)) &
+    !  return  ! bail out
+    !export_slice = export_slice + 1
 
-    !write(*,*) 'CICE: --- run phase called ---'
+    write(*,*) 'CICE: --- run phase called ---'
 
   end subroutine 
 
@@ -558,7 +561,7 @@ module cice_cap_mod
 
     import_from_atmos(1)%short_name = 'strax'
     import_from_atmos(1)%long_name = 'wind stress components'
-    import_from_atmos(1)%standard_name = 'mean_zonal_moment_flxNAME'
+    import_from_atmos(1)%standard_name = 'mean_zonal_moment_flx'
     import_from_atmos(1)%unit = 'N/m^2'
     import_from_atmos(1)%connected = .false.
     import_from_atmos(1)%farrayPtr => strax
@@ -566,7 +569,7 @@ module cice_cap_mod
 
     import_from_atmos(2)%short_name = 'stray'
     import_from_atmos(2)%long_name = 'wind stress components'
-    import_from_atmos(2)%standard_name = 'mean_merid_moment_flxNAME'
+    import_from_atmos(2)%standard_name = 'mean_merid_moment_flx'
     import_from_atmos(2)%unit = 'N/m^2'
     import_from_atmos(2)%connected = .false.
     import_from_atmos(2)%farrayPtr => stray
@@ -670,7 +673,7 @@ module cice_cap_mod
 
     import_from_atmos(15)%short_name = 'flw'
     import_from_atmos(15)%long_name = 'incoming longwave radiation'
-    import_from_atmos(15)%standard_name = 'mean_down_lw_flxNAME'
+    import_from_atmos(15)%standard_name = 'mean_down_lw_flx'
     import_from_atmos(15)%unit = 'W/m^2'
     import_from_atmos(15)%connected = .true.
     import_from_atmos(15)%farrayPtr => flw
@@ -678,7 +681,7 @@ module cice_cap_mod
 
     import_from_atmos(16)%short_name = 'frain'
     import_from_atmos(16)%long_name = 'rainfall rate'
-    import_from_atmos(16)%standard_name = 'mean_prec_rateNAME'
+    import_from_atmos(16)%standard_name = 'mean_prec_rate'
     import_from_atmos(16)%unit = 'kg/m^2 s'
     import_from_atmos(16)%connected = .true.
     import_from_atmos(16)%farrayPtr => frain
@@ -686,7 +689,7 @@ module cice_cap_mod
 
     import_from_atmos(17)%short_name = 'fsnow'
     import_from_atmos(17)%long_name = 'snowfall rate'
-    import_from_atmos(17)%standard_name = 'mean_prec_rateNAME'
+    import_from_atmos(17)%standard_name = 'mean_prec_rate'
     import_from_atmos(17)%unit = 'kg/m^2 s'
     import_from_atmos(17)%connected = .true.
     import_from_atmos(17)%farrayPtr => frain
@@ -742,7 +745,7 @@ module cice_cap_mod
 
     import_from_ocean(6)%short_name = 'sst'
     import_from_ocean(6)%long_name = 'sea surface temperature'
-    import_from_ocean(6)%standard_name = 'sea_surface_temperatureNAME'
+    import_from_ocean(6)%standard_name = 'sea_surface_temperature'
     import_from_ocean(6)%unit = 'C'
     import_from_ocean(6)%connected = .false.
     import_from_ocean(6)%farrayPtr => sst
