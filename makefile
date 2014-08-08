@@ -1,9 +1,17 @@
-SRCDIR=/home/Fei.Liu/NEMS/src
+
+SRCDIR=/home/$(USER)/NEMS/src
+#installdate=latest
+installdate := $(shell date '+%Y-%m-%d-%H-%M-%S')
+INSTALLDIR=/home/$(USER)/ICE-INSTALLS/CICE_$(installdate)
+LANLCICEGITDIR=/home/Fei.Liu/github/lanl_cice
+LANLCICEDIR=/home/Fei.Liu/noscrub/lanl_cice
+
 include $(SRCDIR)/conf/configure.nems
 
-MAKEFILE = makefile
+PWDDIR := $(shell pwd)
+UTILINCS = -I$(LANLCICEDIR)/compile
 
-UTILINCS = -I/home/Fei.Liu/noscrub/lanl_cice/compile
+MAKEFILE = makefile
 
 LIBRARY  = libcice.a
 
@@ -13,9 +21,10 @@ MODULES_STUB  =
 
 DEPEND_FILES = ${MODULES:.o=.F90}
 
-installdir := $(shell date '+%Y-%m-%d-%H-%M-%S')
-capgithead := $(shell git show-ref origin/master| cut -f1 -d' ')
-cicegithead := $(shell cd ../lanl_cice/ && git show-ref origin/master | cut -f1 -d' ' && cd ../lanl_cice_cap/)
+capgitname  := $(shell git remote -v | grep origin | head -1 | cut -f2 | cut -f1 -d " " )
+capgithead  := $(shell git show-ref origin/master| cut -f1 -d " ")
+cicegitname := $(shell cd $(LANLCICEGITDIR) && git remote -v | grep origin | head -1 | cut -f2 | cut -f1 -d " "  && cd $(PWDDIR) )
+cicegithead := $(shell cd $(LANLCICEGITDIR) && git show-ref origin/master | cut -f1 -d " " && cd $(PWDDIR) )
 
 
 all default: depend
@@ -23,9 +32,20 @@ all default: depend
 
 $(LIBRARY): $(MODULES)
 	$(AR) $(ARFLAGS) $@ $?
-	sed -e 's/timestr/$(installdir)/g' cice.mk.template > cice.mk.install && sed -i -e 's/cice_github_revision/$(cicegithead)/g' cice.mk.install && sed -i -e 's/cice_cap_github_revision/$(capgithead)/g' cice.mk.install && mkdir /home/Fei.Liu/ICE-INSTALLS/$(installdir) && cp libcice.a cice_cap_mod.mod /home/Fei.Liu/ICE-INSTALLS/$(installdir) && cp cice.mk.install /home/Fei.Liu/ICE-INSTALLS/$(installdir)/cice.mk && rm cice.mk.install
-	cp libcice.a cice.mk cice_cap_mod.mod /home/Fei.Liu/cicenems
-	
+	rm -f cice.mk.install
+	@echo "# ESMF self-describing build dependency makefile fragment" > cice.mk.install
+	@echo "# src location Zeus: $pwd" >> cice.mk.install
+	@echo "# CICE github location:  $(cicegitname) $(cicegithead)" >> cice.mk.install
+	@echo "# CICE CAP github location: $(capgitname) $(capgithead)" >> cice.mk.install
+	@echo  >> cice.mk.install
+	@echo "ESMF_DEP_FRONT     = cice_cap_mod" >> cice.mk.install
+	@echo "ESMF_DEP_INCPATH   = $(INSTALLDIR)" >> cice.mk.install
+	@echo "ESMF_DEP_CMPL_OBJS = " >> cice.mk.install
+	@echo "ESMF_DEP_LINK_OBJS = $(INSTALLDIR)/libcice.a $(LANLCICEDIR)/liblanl_cice.a" >> cice.mk.install
+	mkdir -p $(INSTALLDIR)
+	cp -f libcice.a cice_cap_mod.mod $(INSTALLDIR) 
+	cp -f cice.mk.install $(INSTALLDIR)/cice.mk
+
 $(MODULES): %.o: %.f90
 	$(FC) $(FFLAGS) $(UTILINCS) -c $*.f90
 
