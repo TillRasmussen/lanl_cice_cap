@@ -1,13 +1,10 @@
-!--------------- CICE Ocean solo model -----------------
-! This is the CICE ocean solo model component that's NUOPC compiant.
-! The public ocn_register method sets up all the model services such as
-! initialize, run and finalize.
+!--------------- LANL CICE NUOPC CAP -----------------
+! This is the LANL CICE model cap component that's NUOPC compiant.
 !
 ! Author:  Fei.Liu@gmail.com
 !
 ! 5/10/13
-! This is now acting as a cap/connector between NUOPC driver and GFDL CICE code.
-! Right now it's working in solo ocean mode where it does not export/import any data
+! This is now acting as a cap/connector between NUOPC driver and LANL CICE code.
 !
 
 module cice_cap_mod
