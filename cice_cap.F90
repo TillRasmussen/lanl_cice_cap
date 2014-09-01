@@ -39,20 +39,19 @@ module cice_cap_mod
   integer   :: import_slice = 0
   integer   :: export_slice = 0
 
-  type CICE_Field_Definition
-    character(len=64)                             :: short_name
-    character(len=128)                            :: long_name
-    character(len=64)                             :: standard_name
-    character(len=64)                             :: unit
-    logical                                       :: connected
-    real(ESMF_KIND_R8), dimension(:,:,:), pointer :: farrayPtr => null()
-  end type CICE_Field_Definition
+  type fld_list_type
+    character(len=64) :: stdname
+    character(len=64) :: shortname
+    character(len=64) :: transferOffer
+    logical           :: assoc    ! is the farrayPtr associated with internal data
+    real(ESMF_KIND_R8), dimension(:,:,:), pointer :: farrayPtr
+  end type fld_list_type
 
-  type(CICE_Field_Definition) :: import_from_atmos(18)
-  type(CICE_Field_Definition) :: import_from_ocean(12)
-  type(CICE_Field_Definition) :: export_to_atmos(22)
-  type(CICE_Field_Definition) :: export_to_ocean(8)
-  type(CICE_Field_Definition) :: pass_thr_ocn_to_atm(12)
+  integer,parameter :: fldsMax = 100
+  integer :: fldsToIce_num = 0
+  type (fld_list_type) :: fldsToIce(fldsMax)
+  integer :: fldsFrIce_num = 0
+  type (fld_list_type) :: fldsFrIce(fldsMax)
 
   integer :: lsize    ! local number of gridcells for coupling
   real(ESMF_KIND_R8), pointer :: aice_cpl(:,:,:)
@@ -116,28 +115,6 @@ module cice_cap_mod
 
     call CICE_FieldsSetup()
 
-    call CICE_BuildFieldDictionary(import_from_atmos, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_BuildFieldDictionary(import_from_ocean, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-
-    call CICE_BuildFieldDictionary(export_to_atmos, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_BuildFieldDictionary(export_to_ocean, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-
   end subroutine
 
   subroutine InitializeP1(gcomp, importState, exportState, clock, rc)
@@ -167,22 +144,12 @@ module cice_cap_mod
 
     call CICE_Initialize(mpi_comm)
 
-    call CICE_AdvertiseFields(importState, import_from_atmos, rc)
+    call CICE_AdvertiseFields(importState, fldsToIce_num, fldsToIce, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
-    call CICE_AdvertiseFields(importState, import_from_ocean, rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_AdvertiseFields(exportState, export_to_atmos, rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_AdvertiseFields(exportState, export_to_ocean, rc)
+    call CICE_AdvertiseFields(exportState, fldsFrIce_num, fldsFrIce, rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
@@ -279,26 +246,28 @@ module cice_cap_mod
 
     gridOut = gridIn ! for now out same as in
 
-    call CICE_RealizeFields(importState, gridIn, import_from_atmos, "Atmos import", rc)
+    call CICE_RealizeFields(importState, gridIn , fldsToIce_num, fldsToIce, "Ice import", rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
-    call CICE_RealizeFields(importState, gridIn, import_from_ocean, "Ocean import", rc)
+    call CICE_RealizeFields(exportState, gridOut, fldsFrIce_num, fldsFrIce, "Ice export", rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
-    call CICE_RealizeFields(exportState, gridOut, export_to_atmos, "Atmos export", rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call CICE_RealizeFields(exportState, gridOut, export_to_ocean, "Ocean export", rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+
+! Have to be careful with reset since states are pointing directly into cice arrays
+!    call state_reset(ImportState, value=-99._ESMF_KIND_R8, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!      line=__LINE__, &
+!      file=__FILE__)) &
+!      return  ! bail out
+!    call state_reset(ExportState, value=-99._ESMF_KIND_R8, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!      line=__LINE__, &
+!      file=__FILE__)) &
+!      return  ! bail out
 
     write(*,*) '----- CICE initialization phase 2 completed'
 
@@ -476,57 +445,22 @@ module cice_cap_mod
 
   end subroutine cice_model_finalize
 
-  subroutine CICE_BuildFieldDictionary(field_defs, rc)
-
-    type(CICE_Field_Definition), intent(inout) :: field_defs(:)
-    integer, intent(inout)                      :: rc
-
-    integer                                     :: nfields, i
-
-    rc = ESMF_SUCCESS
-
-    nfields = size(field_defs)
-
-    do i = 1, nfields
-
-      ! importable field: i-directed wind stress into ocean
-      ! Available from GSM atmosphere model: YES
-      ! Corresponding GSM atmosphere output field name: mean_zonal_moment_flx
-      if(.not. NUOPC_FieldDictionaryHasEntry(field_defs(i)%standard_name, rc=rc)) then
-        call NUOPC_FieldDictionaryAddEntry(standardName=field_defs(i)%standard_name, &
-          canonicalUnits=field_defs(i)%unit, &
-          defaultLongName=field_defs(i)%long_name, &
-          defaultShortName=field_defs(i)%short_name, &
-          rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-          line=__LINE__, &
-          file=__FILE__)) &
-          return  ! bail out
-      endif
-
-    enddo
-
-  end subroutine CICE_BuildFieldDictionary
-
-  subroutine CICE_AdvertiseFields(state, field_defs, rc)
+  subroutine CICE_AdvertiseFields(state, nfields, field_defs, rc)
 
     type(ESMF_State), intent(inout)             :: state
-    type(CICE_Field_Definition), intent(inout) :: field_defs(:)
+    integer,intent(in)                          :: nfields
+    type(fld_list_type), intent(inout)          :: field_defs(:)
     integer, intent(inout)                      :: rc
 
-    integer                                     :: nfields, i
+    integer                                     :: i
 
     rc = ESMF_SUCCESS
-
-    nfields = size(field_defs)
 
     do i = 1, nfields
 
       call NUOPC_StateAdvertiseField(state, &
-        standardName=field_defs(i)%standard_name, &
-        longname=field_defs(i)%long_name, &
-        shortname=field_defs(i)%short_name, &
-        name=field_defs(i)%short_name, &
+        standardName=field_defs(i)%stdname, &
+        name=field_defs(i)%shortname, &
         rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -537,15 +471,16 @@ module cice_cap_mod
 
   end subroutine CICE_AdvertiseFields
 
-  subroutine CICE_RealizeFields(state, grid, field_defs, tag, rc)
+  subroutine CICE_RealizeFields(state, grid, nfields, field_defs, tag, rc)
 
     type(ESMF_State), intent(inout)             :: state
     type(ESMF_Grid), intent(in)                 :: grid
-    type(CICE_Field_Definition), intent(inout)  :: field_defs(:)
+    integer, intent(in)                         :: nfields
+    type(fld_list_type), intent(inout)          :: field_defs(:)
     character(len=*), intent(in)                :: tag
     integer, intent(inout)                      :: rc
 
-    integer                                     :: nfields, i
+    integer                                     :: i
     type(ESMF_Field)                            :: field
     integer                                     :: npet, nx, ny, pet, elb(2), eub(2), clb(2), cub(2), tlb(2), tub(2)
     type(ESMF_VM)                               :: vm
@@ -571,40 +506,46 @@ module cice_cap_mod
       !  file=__FILE__, &
       !  rc=rc)
 
-    nfields = size(field_defs)
-
     do i = 1, nfields
 
-      write(info, *) '/', field_defs(i)%short_name, ':', &
-        lbound(field_defs(i)%farrayPtr,1), ubound(field_defs(i)%farrayPtr,1), &
-        lbound(field_defs(i)%farrayPtr,2), ubound(field_defs(i)%farrayPtr,2), &
-        lbound(field_defs(i)%farrayPtr,3), ubound(field_defs(i)%farrayPtr,3)
-      call ESMF_LogWrite(tag // " Field "// field_defs(i)%standard_name // info, &
-        ESMF_LOGMSG_INFO, &
-        line=__LINE__, &
-        file=__FILE__, &
-        rc=rc)
-
-      if(associated(field_defs(i)%farrayPtr)) then
+      if (field_defs(i)%assoc) then
+        write(info, *) '/', field_defs(i)%shortname, ':', &
+          lbound(field_defs(i)%farrayPtr,1), ubound(field_defs(i)%farrayPtr,1), &
+          lbound(field_defs(i)%farrayPtr,2), ubound(field_defs(i)%farrayPtr,2), &
+          lbound(field_defs(i)%farrayPtr,3), ubound(field_defs(i)%farrayPtr,3)
+        call ESMF_LogWrite(tag // " Field "// field_defs(i)%stdname // info, &
+          ESMF_LOGMSG_INFO, &
+          line=__LINE__, &
+          file=__FILE__, &
+          rc=rc)
         field = ESMF_FieldCreate(grid=grid, &
           farray=field_defs(i)%farrayPtr, indexflag=ESMF_INDEX_DELOCAL, &
 !          farray=field_defs(i)%farrayPtr, indexflag=ESMF_INDEX_GLOBAL, &
           totalLWidth=(/1,1/), totalUWidth=(/1,1/),&
           ungriddedLBound=(/1/), ungriddedUBound=(/max_blocks/), &
-          name=field_defs(i)%short_name, rc=rc)
+          name=field_defs(i)%shortname, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+      else
+        field = ESMF_FieldCreate(grid, ESMF_TYPEKIND_R8, indexflag=ESMF_INDEX_DELOCAL, &
+          totalLWidth=(/1,1/), totalUWidth=(/1,1/),&
+          ungriddedLBound=(/1/), ungriddedUBound=(/max_blocks/), &
+          name=field_defs(i)%shortname, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__)) &
           return  ! bail out
       endif
 
-      if (NUOPC_StateIsFieldConnected(state, fieldName=field_defs(i)%short_name)) then
+      if (NUOPC_StateIsFieldConnected(state, fieldName=field_defs(i)%shortname)) then
         call NUOPC_StateRealizeField(state, field=field, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__)) &
           return  ! bail out
-        call ESMF_LogWrite(tag // " Field "// field_defs(i)%standard_name // " is connected.", &
+        call ESMF_LogWrite(tag // " Field "// field_defs(i)%stdname // " is connected.", &
           ESMF_LOGMSG_INFO, &
           line=__LINE__, &
           file=__FILE__, &
@@ -613,8 +554,13 @@ module cice_cap_mod
           line=__LINE__, &
           file=__FILE__)) &
           return  ! bail out
+        call ESMF_FieldPrint(field=field, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
       else
-        call ESMF_LogWrite(tag // " Field "// field_defs(i)%standard_name // " is not connected.", &
+        call ESMF_LogWrite(tag // " Field "// field_defs(i)%stdname // " is not connected.", &
           ESMF_LOGMSG_INFO, &
           line=__LINE__, &
           file=__FILE__, &
@@ -626,7 +572,7 @@ module cice_cap_mod
         ! TODO: Initialize the value in the pointer to 0 after proper restart is setup
         !if(associated(field_defs(i)%farrayPtr) ) field_defs(i)%farrayPtr = 0.0
         ! remove a not connected Field from State
-        call ESMF_StateRemove(state, (/field_defs(i)%short_name/), rc=rc)
+        call ESMF_StateRemove(state, (/field_defs(i)%shortname/), rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__)) &
@@ -673,6 +619,7 @@ module cice_cap_mod
       if (ESMF_LogFoundError(rcToCheck=lrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
       write(tmpstr,'(A,3g14.7)') trim(subname)//' '//trim(lstring)//':'//trim(fieldNameList(n)), &
         minval(dataPtr),maxval(dataPtr),sum(dataPtr)
+!      write(tmpstr,'(A)') trim(subname)//' '//trim(lstring)//':'//trim(fieldNameList(n))
       call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
     enddo
     deallocate(fieldNameList)
@@ -680,6 +627,56 @@ module cice_cap_mod
     if (present(rc)) rc = lrc
 
   end subroutine state_diagnose
+
+  !-----------------------------------------------------------------------------
+
+  subroutine state_reset(State, value, rc)
+    ! ----------------------------------------------
+    ! Set all fields to value in State
+    ! If value is not provided, reset to 0.0
+    ! ----------------------------------------------
+    type(ESMF_State), intent(inout) :: State
+    real(ESMF_KIND_R8), intent(in), optional :: value
+    integer, intent(out), optional  :: rc
+
+    ! local variables
+    integer                     :: i,j,k,n
+    integer                     :: fieldCount
+    character(len=64) ,pointer  :: fieldNameList(:)
+    real(ESMF_KIND_R8)          :: lvalue
+    real(ESMF_KIND_R8), pointer :: dataPtr(:,:,:)
+    character(len=*),parameter :: subname='(cice_cap:state_reset)'
+
+    if (present(rc)) rc = ESMF_SUCCESS
+
+    lvalue = 0._ESMF_KIND_R8
+    if (present(value)) then
+      lvalue = value
+    endif
+
+    call ESMF_StateGet(State, itemCount=fieldCount, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+    allocate(fieldNameList(fieldCount))
+    call ESMF_StateGet(State, itemNameList=fieldNameList, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+    do n = 1, fieldCount
+      call State_GetFldPtr(State, fieldNameList(n), dataPtr, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+      do k=lbound(dataPtr,3),ubound(dataPtr,3)
+      do j=lbound(dataPtr,2),ubound(dataPtr,2)
+      do i=lbound(dataPtr,1),ubound(dataPtr,1)
+         dataPtr(i,j,k) = lvalue
+      enddo
+      enddo
+      enddo
+
+    enddo
+    deallocate(fieldNameList)
+
+  end subroutine state_reset
+
+  !-----------------------------------------------------------------------------
 
   subroutine State_GetFldPtr(ST, fldname, fldptr, rc)
     type(ESMF_State), intent(in) :: ST
@@ -690,7 +687,7 @@ module cice_cap_mod
     ! local variables
     type(ESMF_Field) :: lfield
     integer :: lrc
-    character(len=*),parameter :: subname='(module_MEDIATOR:State_GetFldPtr)'
+    character(len=*),parameter :: subname='(cice_cap:State_GetFldPtr)'
 
     call ESMF_StateGet(ST, itemName=trim(fldname), field=lfield, rc=lrc)
     if (ESMF_LogFoundError(rcToCheck=lrc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
@@ -701,588 +698,157 @@ module cice_cap_mod
 
   end subroutine State_GetFldPtr
 
+  !-----------------------------------------------------------------------------
+
   subroutine CICE_FieldsSetup
 
-    import_from_atmos(1)%short_name = 'iuwh10m'
-    import_from_atmos(1)%long_name = 'zonal wind speed'
-    import_from_atmos(1)%standard_name = 'xx_inst_zonal_wind_height10m'
-    import_from_atmos(1)%unit = 'N/m^2'
-    import_from_atmos(1)%connected = .false.
-    import_from_atmos(1)%farrayPtr => strax
+!   call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide", strax)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height10m", "will provide", stray)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "inst_pressure_height_surface", "will provide", zlvl)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "xx_pot_air_temp", "will provide", potT)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m", "will provide", Tair)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m", "will provide", Qa)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "xx_inst_air_density", "will provide", rhoa)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dir_flx", "will provide", swvdr)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dif_flx", "will provide", swvdf)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dir_flx", "will provide", swidr)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dif_flx", "will provide", swidf)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx", "will provide", flw)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "mean_prec_rate", "will provide", frain)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "xx_mean_fprec_rate", "will provide", frain)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "xx_faero_atm", "will provide", faero_atm)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal", "will provide", uocn)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid", "will provide", vocn)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_zonal", "will provide", ss_tltx)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_merid", "will provide", ss_tlty)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "s_surf", "will provide", sss)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature", "will provide", sst)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", "will provide", frzmlt)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "xx_inst_frz_mlt_potential", "will provide", frzmlt_init)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "freezing_temp", "will provide", Tf)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "mean_deep_ocean_down_heat_flx", "will provide", qdp)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "mixed_layer_depth", "will provide", hmix)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "xx_daice_da", "will provide", daice_da)
+
+! tcraig, don't point directly into cice data YET (last field is optional in interface)
+! instead, create space for the field when it's "realized".
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height10m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_pressure_height_surface", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dir_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dif_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dir_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dif_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_prec_rate", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_zonal", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_merid", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_temp", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_deep_ocean_down_heat_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mixed_layer_depth", "will provide")
+
+
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal", "will provide", strairxT)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid", "will provide", strairyT)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_sensi_heat_flx", "will provide", fsens)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx", "will provide", flat)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_fswabs", "will provide", fswabs)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_up_lw_flx", "will provide", flwout)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_temp_height2m", "will provide", Tref)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_spec_humid_height2m", "will provide", Qref)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_evap_rate", "will provide", evap)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_vis_dir_albedo", "will provide", alvdr)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_ir_dir_albedo", "will provide", alidr)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_vis_dif_albedo", "will provide", alvdf)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_ir_dif_albedo", "will provide", alidf)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_albedo_vis_dir", "will provide", alvdr_ai)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_albedo_nir_dir", "will provide", alidr_ai)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_albedo_vis_dif", "will provide", alvdf_ai)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_albedo_nir_dif", "will provide", alidf_ai)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_bare_ice_albedo", "will provide", albice)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_snow_albedo", "will provide", albsno)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_melt_pond_albedo", "will provide", albpnd)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_apeff_ai", "will provide", apeff_ai)
 
-
-    import_from_atmos(2)%short_name = 'ivwh10m'
-    import_from_atmos(2)%long_name = 'meridional wind speed'
-    import_from_atmos(2)%standard_name = 'xx_inst_merid_wind_height10m'
-    import_from_atmos(2)%unit = 'N/m^2'
-    import_from_atmos(2)%connected = .false.
-    import_from_atmos(2)%farrayPtr => stray
-
-
-    import_from_atmos(3)%short_name = 'zlvl'
-    import_from_atmos(3)%long_name = 'atm level height'
-    import_from_atmos(3)%standard_name = 'xx_atm_level_height'
-    import_from_atmos(3)%unit = 'm'
-    import_from_atmos(3)%connected = .false.
-    import_from_atmos(3)%farrayPtr => zlvl
-
-
-    import_from_atmos(4)%short_name = 'uatm'
-    import_from_atmos(4)%long_name = 'wind velocity components'
-    import_from_atmos(4)%standard_name = 'xx_wind_zonal'
-    import_from_atmos(4)%unit = 'm/s'
-    import_from_atmos(4)%connected = .false.
-    import_from_atmos(4)%farrayPtr => uatm
-
-
-    import_from_atmos(5)%short_name = 'vatm'
-    import_from_atmos(5)%long_name = 'wind velocity components'
-    import_from_atmos(5)%standard_name = 'xx_wind_merid'
-    import_from_atmos(5)%unit = 'm/s'
-    import_from_atmos(5)%connected = .false.
-    import_from_atmos(5)%farrayPtr => vatm
-
-
-    import_from_atmos(6)%short_name = 'wind'
-    import_from_atmos(6)%long_name = 'wind speed'
-    import_from_atmos(6)%standard_name = 'xx_wind_speed'
-    import_from_atmos(6)%unit = 'm/s'
-    import_from_atmos(6)%connected = .false.
-    import_from_atmos(6)%farrayPtr => wind
-
-
-    import_from_atmos(7)%short_name = 'pat'
-    import_from_atmos(7)%long_name = 'air potential temperature'
-    import_from_atmos(7)%standard_name = 'xx_pot_air_temp'
-    import_from_atmos(7)%unit = 'K'
-    import_from_atmos(7)%connected = .false.
-    import_from_atmos(7)%farrayPtr => potT
-
-
-    import_from_atmos(8)%short_name = 'ith2m'
-    import_from_atmos(8)%long_name = 'air temperature at 2m'
-    import_from_atmos(8)%standard_name = 'xx_inst_temp_height2m'
-    import_from_atmos(8)%unit = 'K'
-    import_from_atmos(8)%connected = .false.
-    import_from_atmos(8)%farrayPtr => Tair
-
-
-    import_from_atmos(9)%short_name = 'ishh2m'
-    import_from_atmos(9)%long_name = 'air specific humidity at 2m'
-    import_from_atmos(9)%standard_name = 'xx_inst_spec_humid_height2m'
-    import_from_atmos(9)%unit = 'kg/kg'
-    import_from_atmos(9)%connected = .false.
-    import_from_atmos(9)%farrayPtr => Qa
-
-
-    import_from_atmos(10)%short_name = 'iad'
-    import_from_atmos(10)%long_name = 'air density'
-    import_from_atmos(10)%standard_name = 'xx_inst_air_density'
-    import_from_atmos(10)%unit = 'kg/m^3'
-    import_from_atmos(10)%connected = .false.
-    import_from_atmos(10)%farrayPtr => rhoa   
-
-
-    import_from_atmos(11)%short_name = 'sw_flux_vis_dir'
-    import_from_atmos(11)%long_name = 'sw down, visible, direct'
-    import_from_atmos(11)%standard_name = 'xx_mean_down_sw_vis_dir_flx'
-    import_from_atmos(11)%unit = 'W/m^2'
-    import_from_atmos(11)%connected = .true.
-    import_from_atmos(11)%farrayPtr => swvdr   
-
-
-    import_from_atmos(12)%short_name = 'sw_flux_vis_dif'
-    import_from_atmos(12)%long_name = 'sw down, visible, diffuse'
-    import_from_atmos(12)%standard_name = 'xx_mean_down_sw_vis_dif_flx'
-    import_from_atmos(12)%unit = 'W/m^2'
-    import_from_atmos(12)%connected = .true.
-    import_from_atmos(12)%farrayPtr => swvdf
-
-
-    import_from_atmos(13)%short_name = 'sw_flux_nir_dir'
-    import_from_atmos(13)%long_name = 'sw down, near IR, direct'
-    import_from_atmos(13)%standard_name = 'xx_mean_down_sw_ir_dir_flx'
-    import_from_atmos(13)%unit = 'W/m^2'
-    import_from_atmos(13)%connected = .true.
-    import_from_atmos(13)%farrayPtr => swidr
-
-
-    import_from_atmos(14)%short_name = 'sw_flux_nir_dif'
-    import_from_atmos(14)%long_name = 'sw down, near IR, diffuse'
-    import_from_atmos(14)%standard_name = 'xx_mean_down_sw_ir_dif_flx'
-    import_from_atmos(14)%unit = 'W/m^2'
-    import_from_atmos(14)%connected = .true.
-    import_from_atmos(14)%farrayPtr => swidf
-
-
-    import_from_atmos(15)%short_name = 'mdlwfx'
-    import_from_atmos(15)%long_name = 'incoming downward longwave radiation'
-    import_from_atmos(15)%standard_name = 'xx_mean_down_lw_flx'
-    import_from_atmos(15)%unit = 'W/m^2'
-    import_from_atmos(15)%connected = .true.
-    import_from_atmos(15)%farrayPtr => flw
-
-
-    import_from_atmos(16)%short_name = 'lprec'
-    import_from_atmos(16)%long_name = 'liquid precip rate'
-    import_from_atmos(16)%standard_name = 'xx_mean_prec_rate'
-    import_from_atmos(16)%unit = 'kg/m^2 s'
-    import_from_atmos(16)%connected = .true.
-!    import_from_atmos(16)%farrayPtr => frain
-
-
-    import_from_atmos(17)%short_name = 'fprec'
-    import_from_atmos(17)%long_name = 'frozen precip rate'
-    import_from_atmos(17)%standard_name = 'xx_mean_fprec_rate'
-    import_from_atmos(17)%unit = 'kg/m^2 s'
-    import_from_atmos(17)%connected = .true.
-!    import_from_atmos(17)%farrayPtr => frain
-
-
-    import_from_atmos(18)%short_name = 'faero_atm'
-    import_from_atmos(18)%long_name = 'aerosol deposition rate'
-    import_from_atmos(18)%standard_name = 'xx_faero_atm'
-    import_from_atmos(18)%unit = 'kg/m^2 s'
-    import_from_atmos(18)%connected = .false.
-!    !import_from_atmos(18)%farrayPtr => faero_atm
-
-
-    import_from_ocean(1)%short_name = 'ocncz'
-    import_from_ocean(1)%long_name = 'ocean current, zonal-direction'
-    import_from_ocean(1)%standard_name = 'ocn_current_zonal'
-    import_from_ocean(1)%unit = 'm/s'
-    import_from_ocean(1)%connected = .false.
-!    allocate(ocncz_cpl(nx_block,ny_block,max_blocks))
-!    import_from_ocean(1)%farrayPtr => ocncz_cpl
-    import_from_ocean(1)%farrayPtr => uocn
-
-
-    import_from_ocean(2)%short_name = 'ocncm'
-    import_from_ocean(2)%long_name = 'ocean current, meridional-direction'
-    import_from_ocean(2)%standard_name = 'ocn_current_merid'
-    import_from_ocean(2)%unit = 'm/s'
-    import_from_ocean(2)%connected = .false.
-!    allocate(ocncm_cpl(nx_block,ny_block,max_blocks))
-!    import_from_ocean(2)%farrayPtr => ocncm_cpl
-    import_from_ocean(2)%farrayPtr => vocn
-
-
-    import_from_ocean(3)%short_name = 'sssz'
-    import_from_ocean(3)%long_name = 'sea surface slope, zonal-direction'
-    import_from_ocean(3)%standard_name = 'sea_surface_slope_zonal'
-    import_from_ocean(3)%unit = 'm/m'
-    import_from_ocean(3)%connected = .false.
-    import_from_ocean(3)%farrayPtr => ss_tltx
-
-    import_from_ocean(4)%short_name = 'sssm'
-    import_from_ocean(4)%long_name = 'sea surface slope, meridional-direction'
-    import_from_ocean(4)%standard_name = 'sea_surface_slope_merid'
-    import_from_ocean(4)%unit = 'm/m'
-    import_from_ocean(4)%connected = .false.
-    import_from_ocean(4)%farrayPtr => ss_tlty
-
-
-    import_from_ocean(5)%short_name = 'sss'
-    import_from_ocean(5)%long_name = 'sea surface salinity'
-    import_from_ocean(5)%standard_name = 's_surf'
-    import_from_ocean(5)%unit = 'psu'
-    import_from_ocean(5)%connected = .true.
-    import_from_ocean(5)%farrayPtr => sss
-
-
-    import_from_ocean(6)%short_name = 'sst'
-    import_from_ocean(6)%long_name = 'sea surface temperature'
-    import_from_ocean(6)%standard_name = 'yy_sea_surface_temperature'
-    import_from_ocean(6)%unit = 'C'
-    import_from_ocean(6)%connected = .false.
-    import_from_ocean(6)%farrayPtr => sst
-
-
-    import_from_ocean(7)%short_name = 'fmpot'
-    import_from_ocean(7)%long_name = 'freezing/melting potential'
-    import_from_ocean(7)%standard_name = 'freezing_melting_potential'
-    import_from_ocean(7)%unit = 'W/m^2'
-    import_from_ocean(7)%connected = .false.
-    import_from_ocean(7)%farrayPtr => frzmlt
-
-
-    import_from_ocean(8)%short_name = 'frzmlt_init'
-    import_from_ocean(8)%long_name = 'frzmlt used in current time step'
-    import_from_ocean(8)%standard_name = 'xx_inst_frz_mlt_potential'
-    import_from_ocean(8)%unit = 'W/m^2'
-    import_from_ocean(8)%connected = .false.
-    import_from_ocean(8)%farrayPtr => frzmlt_init 
-
-
-    import_from_ocean(9)%short_name = 'ftemp'
-    import_from_ocean(9)%long_name = 'freezing temperature'
-    import_from_ocean(9)%standard_name = 'freezing_temp'
-    import_from_ocean(9)%unit = 'C'
-    import_from_ocean(9)%connected = .false.
-    import_from_ocean(9)%farrayPtr => Tf
-
-
-    import_from_ocean(10)%short_name = 'mdodhfx'
-    import_from_ocean(10)%long_name = 'deep ocean heat flux, negative upward'
-    import_from_ocean(10)%standard_name = 'mean_deep_ocean_down_heat_flx'
-    import_from_ocean(10)%unit = 'W/m^2'
-    import_from_ocean(10)%connected = .false.
-    import_from_ocean(10)%farrayPtr => qdp
-
-
-    import_from_ocean(11)%short_name = 'mld'
-    import_from_ocean(11)%long_name = 'mixed layer depth'
-    import_from_ocean(11)%standard_name = 'mixed_layer_depth'
-    import_from_ocean(11)%unit = 'm'
-    import_from_ocean(11)%connected = .false.
-    import_from_ocean(11)%farrayPtr => hmix
-
-
-    import_from_ocean(12)%short_name = 'daice_da'
-    import_from_ocean(12)%long_name = 'data assimilation concentration increment rate'
-    import_from_ocean(12)%standard_name = 'xx_daice_da'
-    import_from_ocean(12)%unit = 'M/s'
-    import_from_ocean(12)%connected = .false.
-    import_from_ocean(12)%farrayPtr => daice_da
-
-
-    export_to_atmos(1)%short_name = 'strairxT'
-    export_to_atmos(1)%long_name = 'stress on ice by air, zonal-direction'
-    export_to_atmos(1)%standard_name = 'stress_on_air_ice_zonal'
-    export_to_atmos(1)%unit = 'N/m^2'
-    export_to_atmos(1)%connected = .false.
-    export_to_atmos(1)%farrayPtr => strairxT
-
-
-    export_to_atmos(2)%short_name = 'strairyT'
-    export_to_atmos(2)%long_name = 'stress on ice by air, meridional-direction'
-    export_to_atmos(2)%standard_name = 'stress_on_air_ice_merid'
-    export_to_atmos(2)%unit = 'N/m^2'
-    export_to_atmos(2)%connected = .false.
-    export_to_atmos(2)%farrayPtr => strairyT
-
-
-    export_to_atmos(3)%short_name = 'mshfx'
-    export_to_atmos(3)%long_name = 'sensible heat flux'
-    export_to_atmos(3)%standard_name = 'xx_mean_sensi_heat_flx'
-    export_to_atmos(3)%unit = 'W/w^2'
-    export_to_atmos(3)%connected = .false.
-    export_to_atmos(3)%farrayPtr => fsens
-
-
-    export_to_atmos(4)%short_name = 'mlhfx'
-    export_to_atmos(4)%long_name = 'latent heat flux'
-    export_to_atmos(4)%standard_name = 'xx_mean_laten_heat_flx'
-    export_to_atmos(4)%unit = 'W/w^2'
-    export_to_atmos(4)%connected = .false.
-    export_to_atmos(4)%farrayPtr => flat
-
-
-    export_to_atmos(5)%short_name = 'fswabs'
-    export_to_atmos(5)%long_name = 'shortwave flux absorbed in ice and ocean'
-    export_to_atmos(5)%standard_name = 'xx_fswabs'
-    export_to_atmos(5)%unit = 'W/w^2'
-    export_to_atmos(5)%connected = .false.
-    export_to_atmos(5)%farrayPtr => fswabs
-
-
-    export_to_atmos(6)%short_name = 'mulwfx'
-    export_to_atmos(6)%long_name = 'mean upward longwave radiation'
-    export_to_atmos(6)%standard_name = 'xx_mean_up_lw_flx'
-    export_to_atmos(6)%unit = 'W/w^2'
-    export_to_atmos(6)%connected = .false.
-    export_to_atmos(6)%farrayPtr => flwout
-
-
-    export_to_atmos(7)%short_name = 'ith2m'
-    export_to_atmos(7)%long_name = '2m atm reference temperature'
-    export_to_atmos(7)%standard_name = 'xx_inst_temp_height2m'
-    export_to_atmos(7)%unit = 'K'
-    export_to_atmos(7)%connected = .false.
-    export_to_atmos(7)%farrayPtr => Tref
-
-
-    export_to_atmos(8)%short_name = 'ishh2m'
-    export_to_atmos(8)%long_name = '2m atm reference spec humidity'
-    export_to_atmos(8)%standard_name = 'xx_inst_spec_humid_height2m'
-    export_to_atmos(8)%unit = 'K'
-    export_to_atmos(8)%connected = .false.
-    export_to_atmos(8)%farrayPtr => Qref
-
-
-    export_to_atmos(9)%short_name = 'mevap'
-    export_to_atmos(9)%long_name = 'evaporative water flux'
-    export_to_atmos(9)%standard_name = 'xx_mean_evap_rate'
-    export_to_atmos(9)%unit = 'kg/m^2 s'
-    export_to_atmos(9)%connected = .false.
-    export_to_atmos(9)%farrayPtr => evap
-
-
-    export_to_atmos(10)%short_name = 'ivisdira'
-    export_to_atmos(10)%long_name = 'albedo visible, direct'
-    export_to_atmos(10)%standard_name = 'xx_inst_vis_dir_albedo'
-    export_to_atmos(10)%unit = ''
-    export_to_atmos(10)%connected = .false.
-    export_to_atmos(10)%farrayPtr => alvdr
-
-
-    export_to_atmos(11)%short_name = 'iirdira'
-    export_to_atmos(11)%long_name = 'albedo near-ir, direct'
-    export_to_atmos(11)%standard_name = 'xx_inst_ir_dir_albedo'
-    export_to_atmos(11)%unit = ''
-    export_to_atmos(11)%connected = .false.
-    export_to_atmos(11)%farrayPtr => alidr
-
-
-    export_to_atmos(12)%short_name = 'ivisdifa'
-    export_to_atmos(12)%long_name = 'albedo visible, diffuse'
-    export_to_atmos(12)%standard_name = 'xx_inst_vis_dif_albedo'
-    export_to_atmos(12)%unit = ''
-    export_to_atmos(12)%connected = .false.
-    export_to_atmos(12)%farrayPtr => alvdf
-
-
-    export_to_atmos(13)%short_name = 'iirdifa'
-    export_to_atmos(13)%long_name = 'albedo near-ir, diffuse'
-    export_to_atmos(13)%standard_name = 'xx_inst_ir_dif_albedo'
-    export_to_atmos(13)%unit = ''
-    export_to_atmos(13)%connected = .false.
-    export_to_atmos(13)%farrayPtr => alidf
-
-
-    export_to_atmos(14)%short_name = 'alvdr_ai'
-    export_to_atmos(14)%long_name = 'grid-box-mean visible, direct'
-    export_to_atmos(14)%standard_name = 'xx_mean_albedo_vis_dir'
-    export_to_atmos(14)%unit = ''
-    export_to_atmos(14)%connected = .false.
-    export_to_atmos(14)%farrayPtr => alvdr_ai 
-
-
-    export_to_atmos(15)%short_name = 'alidr_ai'
-    export_to_atmos(15)%long_name = 'grid-box-mean near-ir, direct'
-    export_to_atmos(15)%standard_name = 'xx_mean_albedo_nir_dir'
-    export_to_atmos(15)%unit = ''
-    export_to_atmos(15)%connected = .false.
-    export_to_atmos(15)%farrayPtr => alidr_ai
-
-
-    export_to_atmos(16)%short_name = 'alvdf_ai'
-    export_to_atmos(16)%long_name = 'grid-box-mean visible, diffuse'
-    export_to_atmos(16)%standard_name = 'xx_mean_albedo_vis_dif'
-    export_to_atmos(16)%unit = ''
-    export_to_atmos(16)%connected = .false.
-    export_to_atmos(16)%farrayPtr => alvdf_ai
-
-
-    export_to_atmos(17)%short_name = 'alidf_ai'
-    export_to_atmos(17)%long_name = 'grid-box-mean near-ir, diffuse'
-    export_to_atmos(17)%standard_name = 'xx_mean_albedo_nir_dif'
-    export_to_atmos(17)%unit = ''
-    export_to_atmos(17)%connected = .false.
-    export_to_atmos(17)%farrayPtr => alidf_ai
-
-
-    export_to_atmos(18)%short_name = 'albice'
-    export_to_atmos(18)%long_name = 'bare ice albedo'
-    export_to_atmos(18)%standard_name = 'xx_bare_ice_albedo'
-    export_to_atmos(18)%unit = ''
-    export_to_atmos(18)%connected = .false.
-    export_to_atmos(18)%farrayPtr => albice
-
-
-    export_to_atmos(19)%short_name = 'albsno'
-    export_to_atmos(19)%long_name = 'snow albedo'
-    export_to_atmos(19)%standard_name = 'xx_snow_albedo'
-    export_to_atmos(19)%unit = ''
-    export_to_atmos(19)%connected = .false.
-    export_to_atmos(19)%farrayPtr => albsno
-
-
-    export_to_atmos(20)%short_name = 'albpnd'
-    export_to_atmos(20)%long_name = 'melt pond albedo'
-    export_to_atmos(20)%standard_name = 'xx_melt_pond_albedo'
-    export_to_atmos(20)%unit = ''
-    export_to_atmos(20)%connected = .false.
-    export_to_atmos(20)%farrayPtr => albpnd
-
-
-    export_to_atmos(21)%short_name = 'apeff_ai'
-    export_to_atmos(21)%long_name = 'effective pond area used for radiation calculation'
-    export_to_atmos(21)%standard_name = 'xx_apeff_ai'
-    export_to_atmos(21)%unit = 'm^2'
-    export_to_atmos(21)%connected = .false.
-    export_to_atmos(21)%farrayPtr => apeff_ai
-
-
-    export_to_atmos(22)%short_name = 'ifrac'
-    export_to_atmos(22)%long_name = 'sea ice fraction'
-    export_to_atmos(22)%standard_name = 'ice_fraction'
-    export_to_atmos(22)%unit = ' '
-    export_to_atmos(22)%connected = .false.
-!    export_to_atmos(22)%farrayPtr => aice  ! needs target
     allocate(aice_cpl(nx_block,ny_block,max_blocks))
-    export_to_atmos(22)%farrayPtr => aice_cpl
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction", "will provide", aice_cpl)
 
-
-    export_to_ocean(1)%short_name = 'strocnxT'
-    export_to_ocean(1)%long_name = 'stress on ice by ocn, zonal-direction'
-    export_to_ocean(1)%standard_name = 'stress_on_ocn_ice_zonal'
-    export_to_ocean(1)%unit = 'N/m^2'
-    export_to_ocean(1)%connected = .false.
-    export_to_ocean(1)%farrayPtr => strocnxT
-
-
-    export_to_ocean(2)%short_name = 'strocnyT'
-    export_to_ocean(2)%long_name = 'stress on ice by ocn, meridional-direction'
-    export_to_ocean(2)%standard_name = 'stress_on_ocn_ice_merid'
-    export_to_ocean(2)%unit = 'N/m^2'
-    export_to_ocean(2)%connected = .false.
-    export_to_ocean(2)%farrayPtr => strocnyT
-
-
-    export_to_ocean(3)%short_name = 'mfwpond'
-    export_to_ocean(3)%long_name = 'fresh water flux to ponds rate'
-    export_to_ocean(3)%standard_name = 'xx_mean_fresh_water_flx_to_ponds'
-    export_to_ocean(3)%unit = 'kg/m^2/s'
-    export_to_ocean(3)%connected = .false.
-    export_to_ocean(3)%farrayPtr => fpond
-
-
-    export_to_ocean(4)%short_name = 'mfwocn'
-    export_to_ocean(4)%long_name = 'fresh water flux to ocean'
-    export_to_ocean(4)%standard_name = 'xx_mean_fresh_water_to_ocean_rate'
-    export_to_ocean(4)%unit = 'kg/m^2/s'
-    export_to_ocean(4)%connected = .false.
-    export_to_ocean(4)%farrayPtr => fresh
-
-
-    export_to_ocean(5)%short_name = 'salt'
-    export_to_ocean(5)%long_name = 'mean salt flux to ocean'
-    export_to_ocean(5)%standard_name = 'xx_mean_salt_rate'
-    export_to_ocean(5)%unit = 'kg/m^2/s'
-    export_to_ocean(5)%connected = .false.
-    export_to_ocean(5)%farrayPtr => fsalt
-
-
-    export_to_ocean(6)%short_name = 'fhocn'
-    export_to_ocean(6)%long_name = 'net heat flux to ocean'
-    export_to_ocean(6)%standard_name = 'xx_net_heat_flx_to_ocn'
-    export_to_ocean(6)%unit = 'W/m^2'
-    export_to_ocean(6)%connected = .false.
-    export_to_ocean(6)%farrayPtr => fhocn
-
-
-    export_to_ocean(7)%short_name = 'mswpenocn'
-    export_to_ocean(7)%long_name = 'mean shortwave penetration to ocean'
-    export_to_ocean(7)%standard_name = 'mean_sw_pen_to_ocean'
-    export_to_ocean(7)%unit = 'W/m^2'
-    export_to_ocean(7)%connected = .false.
-    export_to_ocean(7)%farrayPtr => fswthru
-
-
-    export_to_ocean(8)%short_name = 'faero_ocn'
-    export_to_ocean(8)%long_name = 'aerosol flux to ocean'
-    export_to_ocean(8)%standard_name = 'xx_faero_ocn'
-    export_to_ocean(8)%unit = 'kg/m^2/s'
-    export_to_ocean(8)%connected = .false.
-    !export_to_ocean(8)%farrayPtr => faero_ocn
-
-
-    pass_thr_ocn_to_atm(1)%short_name = 'strairx_ocn'
-    pass_thr_ocn_to_atm(1)%long_name = 'stress on ocean by air, x-direction'
-    pass_thr_ocn_to_atm(1)%standard_name = 'xx_strairx_ocn'
-    pass_thr_ocn_to_atm(1)%unit = 'N/m^2'
-    pass_thr_ocn_to_atm(1)%connected = .false.
-    pass_thr_ocn_to_atm(1)%farrayPtr => strairx_ocn 
-
-
-    pass_thr_ocn_to_atm(2)%short_name = 'strairy_ocn'
-    pass_thr_ocn_to_atm(2)%long_name = 'stress on ocean by air, y-direction'
-    pass_thr_ocn_to_atm(2)%standard_name = 'xx_strairy_ocn'
-    pass_thr_ocn_to_atm(2)%unit = 'N/m^2'
-    pass_thr_ocn_to_atm(2)%connected = .false.
-    pass_thr_ocn_to_atm(2)%farrayPtr => strairy_ocn
-
-
-    pass_thr_ocn_to_atm(3)%short_name = 'fsens_ocn'
-    pass_thr_ocn_to_atm(3)%long_name = 'sensible heat flux'
-    pass_thr_ocn_to_atm(3)%standard_name = 'xx_mean_sensi_heat_flx'
-    pass_thr_ocn_to_atm(3)%unit = 'W/m^2'
-    pass_thr_ocn_to_atm(3)%connected = .false.
-    pass_thr_ocn_to_atm(3)%farrayPtr => fsens_ocn
-
-
-    pass_thr_ocn_to_atm(4)%short_name = 'flat_ocn'
-    pass_thr_ocn_to_atm(4)%long_name = 'latent heat flux'
-    pass_thr_ocn_to_atm(4)%standard_name = 'xx_mean_laten_heat_flx'
-    pass_thr_ocn_to_atm(4)%unit = 'W/m^2'
-    pass_thr_ocn_to_atm(4)%connected = .false.
-    pass_thr_ocn_to_atm(4)%farrayPtr => flat_ocn
-
-
-    pass_thr_ocn_to_atm(5)%short_name = 'flwout_ocn'
-    pass_thr_ocn_to_atm(5)%long_name = 'outgoing longwave radiation'
-    pass_thr_ocn_to_atm(5)%standard_name = 'xx_flwout_ocn'
-    pass_thr_ocn_to_atm(5)%unit = 'W/m^2'
-    pass_thr_ocn_to_atm(5)%connected = .false.
-    pass_thr_ocn_to_atm(5)%farrayPtr => flwout_ocn
-
-
-    pass_thr_ocn_to_atm(6)%short_name = 'evap_ocn'
-    pass_thr_ocn_to_atm(6)%long_name = 'evaporative water flux'
-    pass_thr_ocn_to_atm(6)%standard_name = 'xx_evap_ocn'
-    pass_thr_ocn_to_atm(6)%unit = 'kg/m^2/s'
-    pass_thr_ocn_to_atm(6)%connected = .false.
-    pass_thr_ocn_to_atm(6)%farrayPtr => evap_ocn
-
-
-    pass_thr_ocn_to_atm(7)%short_name = 'alvdr_ocn'
-    pass_thr_ocn_to_atm(7)%long_name = 'visible, direct'
-    pass_thr_ocn_to_atm(7)%standard_name = 'xx_albedo_vis_dir'
-    pass_thr_ocn_to_atm(7)%unit = ''
-    pass_thr_ocn_to_atm(7)%connected = .false.
-    pass_thr_ocn_to_atm(7)%farrayPtr => alvdr_ocn
-
-
-    pass_thr_ocn_to_atm(8)%short_name = 'alidr_ocn'
-    pass_thr_ocn_to_atm(8)%long_name = 'near-ir, direct'
-    pass_thr_ocn_to_atm(8)%standard_name = 'xx_albedo_nir_dir'
-    pass_thr_ocn_to_atm(8)%unit = ''
-    pass_thr_ocn_to_atm(8)%connected = .false.
-    pass_thr_ocn_to_atm(8)%farrayPtr => alidr_ocn
-
-
-    pass_thr_ocn_to_atm(9)%short_name = 'alvdf_ocn'
-    pass_thr_ocn_to_atm(9)%long_name = 'visible, diffuse'
-    pass_thr_ocn_to_atm(9)%standard_name = 'xx_albedo_vis_dif'
-    pass_thr_ocn_to_atm(9)%unit = ''
-    pass_thr_ocn_to_atm(9)%connected = .false.
-    pass_thr_ocn_to_atm(9)%farrayPtr => alvdf_ocn
-
-
-    pass_thr_ocn_to_atm(10)%short_name = 'alidf_ocn'
-    pass_thr_ocn_to_atm(10)%long_name = 'near-ir, diffuse'
-    pass_thr_ocn_to_atm(10)%standard_name = 'xx_albedo_nir_dif'
-    pass_thr_ocn_to_atm(10)%unit = ''
-    pass_thr_ocn_to_atm(10)%connected = .false.
-    pass_thr_ocn_to_atm(10)%farrayPtr => alidf_ocn
-
-
-    pass_thr_ocn_to_atm(11)%short_name = 'Tref_ocn'
-    pass_thr_ocn_to_atm(11)%long_name = '2m atm reference temperature'
-    pass_thr_ocn_to_atm(11)%standard_name = 'xx_2m_atm_ref_temperature'
-    pass_thr_ocn_to_atm(11)%unit = 'K'
-    pass_thr_ocn_to_atm(11)%connected = .false.
-    pass_thr_ocn_to_atm(11)%farrayPtr => Tref_ocn
-
-
-    pass_thr_ocn_to_atm(12)%short_name = 'Qref_ocn'
-    pass_thr_ocn_to_atm(12)%long_name = '2m atm reference spec humidity'
-    pass_thr_ocn_to_atm(12)%standard_name = 'xx_2m_atm_ref_spec_humidity'
-    pass_thr_ocn_to_atm(12)%unit = 'kg/kg'
-    pass_thr_ocn_to_atm(12)%connected = .false.
-    pass_thr_ocn_to_atm(12)%farrayPtr => Qref_ocn
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal", "will provide", strocnxT)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid", "will provide", strocnyT)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_fresh_water_flx_to_ponds", "will provide", fpond)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_fresh_water_to_ocean_rate", "will provide", fresh)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_salt_rate", "will provide", fsalt)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_net_heat_flx_to_ocn", "will provide", fhocn)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocean", "will provide", fswthru)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_faero_ocn", "will provide", faero_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_strairx_ocn", "will provide", strairx_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_strairy_ocn", "will provide", strairy_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_sensi_heat_flx", "will provide", fsens_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_laten_heat_flx", "will provide", flat_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_flwout_ocn", "will provide", flwout_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_evap_ocn", "will provide", evap_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_albedo_vis_dir", "will provide", alvdr_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_albedo_nir_dir", "will provide", alidr_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_albedo_vis_dif", "will provide", alvdf_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_albedo_nir_dif", "will provide", alidf_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_2m_atm_ref_temperature", "will provide", Tref_ocn)
+!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_2m_atm_ref_spec_humidity", "will provide", Qref_ocn)
 
   end subroutine CICE_FieldsSetup
 
+  !-----------------------------------------------------------------------------
+
+  subroutine fld_list_add(num, fldlist, stdname, transferOffer, data)
+    ! ----------------------------------------------
+    ! Set up a list of field information
+    ! ----------------------------------------------
+    integer,             intent(inout)  :: num
+    type(fld_list_type), intent(inout)  :: fldlist(:)
+    character(len=*),    intent(in)     :: stdname
+    character(len=*),    intent(in)     :: transferOffer
+    real(ESMF_KIND_R8), dimension(:,:,:), optional, target :: data
+
+    ! local variables
+    integer :: rc
+    character(len=256)          :: shortname
+    character(len=*), parameter :: subname='(cice_cap:fld_list_add)'
+
+    ! make sure that stdname is in the NUOPC Field Dictionary 
+    call NUOPC_FieldDictionaryGetEntry(stdname, defaultShortName=shortname, &
+      rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=trim(subname)//&
+      ": invalid stdname: "//trim(stdname), &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    
+    ! fill in the new entry
+
+    num = num + 1
+    if (num > fldsMax) then
+      call ESMF_LogWrite(trim(subname)//&
+      ": ERROR num gt fldsMax "//trim(stdname), ESMF_LOGMSG_ERROR)
+      return
+    endif
+
+    fldlist(num)%stdname        = trim(stdname)
+    fldlist(num)%shortname      = trim(shortname)
+    fldlist(num)%transferOffer  = trim(transferOffer)
+    if (present(data)) then
+      fldlist(num)%assoc        = .true.
+      fldlist(num)%farrayPtr    => data
+    else
+      fldlist(num)%assoc        = .false.
+    endif
+
+  end subroutine fld_list_add
+
+  !-----------------------------------------------------------------------------
 end module cice_cap_mod
