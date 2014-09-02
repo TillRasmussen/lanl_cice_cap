@@ -201,11 +201,11 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
 
-    call ESMF_DistGridPrint(distgrid=distgrid, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+!    call ESMF_DistGridPrint(distgrid=distgrid, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!      line=__LINE__, &
+!      file=__FILE__)) &
+!      return  ! bail out
 
     call ESMF_DistGridGet(distgrid=distgrid, localDE=0, elementCount=cnt, rc=rc)
     allocate(indexList(cnt))
@@ -554,11 +554,11 @@ module cice_cap_mod
           line=__LINE__, &
           file=__FILE__)) &
           return  ! bail out
-        call ESMF_FieldPrint(field=field, rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-          line=__LINE__, &
-          file=__FILE__)) &
-          return  ! bail out
+!        call ESMF_FieldPrint(field=field, rc=rc)
+!        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!          line=__LINE__, &
+!          file=__FILE__)) &
+!          return  ! bail out
       else
         call ESMF_LogWrite(tag // " Field "// field_defs(i)%stdname // " is not connected.", &
           ESMF_LOGMSG_INFO, &
