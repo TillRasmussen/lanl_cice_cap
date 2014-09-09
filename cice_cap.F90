@@ -12,6 +12,7 @@ module cice_cap_mod
   use ice_blocks, only: nx_block, ny_block, block, get_block
   use ice_domain_size, only: max_blocks, nx_global, ny_global
   use ice_domain, only: nblocks, blocks_ice
+  use ice_constants, only: Tffresh
   use ice_flux
   use ice_state
   use CICE_RunMod
@@ -54,7 +55,8 @@ module cice_cap_mod
   type (fld_list_type) :: fldsFrIce(fldsMax)
 
   integer :: lsize    ! local number of gridcells for coupling
-  real(ESMF_KIND_R8), pointer :: aice_cpl(:,:,:)
+  real(ESMF_KIND_R8), allocatable,target :: aice_cpl(:,:,:)
+  real(ESMF_KIND_R8), allocatable,target :: icetemp_cpl(:,:,:)
   character(len=256) :: tmpstr
 
   contains
@@ -393,10 +395,12 @@ module cice_cap_mod
     !---- good place to rotate vectors           -----
 
     aice_cpl = 0.
+    icetemp_cpl = 0.
     do iblk = 1,nblocks
        do j = 1,ny_block
        do i = 1,nx_block
           aice_cpl(i,j,iblk) = aice(i,j,iblk)
+          icetemp_cpl(i,j,iblk) = Tffresh + trcr(i,j,1,iblk)
 !          write(tmpstr,'(a,3i6,2x,g17.7)') 'tcx aice = ',i,j,iblk,aice_cpl(i,j,iblk)
 !          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=rc)
        enddo
@@ -702,9 +706,33 @@ module cice_cap_mod
 
   subroutine CICE_FieldsSetup
 
+!--------- import fields to Sea Ice -------------
+
+! tcraig, don't point directly into cice data YET (last field is optional in interface)
+! instead, create space for the field when it's "realized".
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height10m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_pres_height_surface", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dir_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dif_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dir_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dif_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_prec_rate", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_zonal", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_merid", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mixed_layer_depth", "will provide")
+
 !   call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide", strax)
 !   call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height10m", "will provide", stray)
-!   call fld_list_add(fldsToIce_num, fldsToIce, "inst_pressure_height_surface", "will provide", zlvl)
+!   call fld_list_add(fldsToIce_num, fldsToIce, "inst_pres_height_surface", "will provide", zlvl)
 !   call fld_list_add(fldsToIce_num, fldsToIce, "xx_pot_air_temp", "will provide", potT)
 !   call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m", "will provide", Tair)
 !   call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m", "will provide", Qa)
@@ -730,44 +758,30 @@ module cice_cap_mod
 !   call fld_list_add(fldsToIce_num, fldsToIce, "mixed_layer_depth", "will provide", hmix)
 !   call fld_list_add(fldsToIce_num, fldsToIce, "xx_daice_da", "will provide", daice_da)
 
-! tcraig, don't point directly into cice data YET (last field is optional in interface)
-! instead, create space for the field when it's "realized".
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height10m", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_pressure_height_surface", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dir_flx", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dif_flx", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dir_flx", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dif_flx", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_prec_rate", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_zonal", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_merid", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "freezing_temp", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_deep_ocean_down_heat_flx", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mixed_layer_depth", "will provide")
+!--------- export fields from Sea Ice -------------
 
+    allocate(aice_cpl   (nx_block,ny_block,max_blocks))
+    allocate(icetemp_cpl(nx_block,ny_block,max_blocks))
+
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction", "will provide", aice_cpl)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature", "will provide", icetemp_cpl)
 
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal", "will provide", strairxT)
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid", "will provide", strairyT)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_sensi_heat_flx", "will provide", fsens)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx", "will provide", flat)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_fswabs", "will provide", fswabs)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_up_lw_flx", "will provide", flwout)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx_atm_into_ice", "will provide", flat)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sensi_heat_flx_atm_into_ice", "will provide", fsens)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_up_lw_flx_ice", "will provide", flwout)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_evap_rate_atm_into_ice", "will provide", evap)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo", "will provide", alvdr)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo" , "will provide", alidr)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo", "will provide", alvdf)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo" , "will provide", alidf)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal", "will provide", strocnxT)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid", "will provide", strocnyT)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocn", "will provide", fswthru)
+
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_temp_height2m", "will provide", Tref)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_spec_humid_height2m", "will provide", Qref)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_evap_rate", "will provide", evap)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_vis_dir_albedo", "will provide", alvdr)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_ir_dir_albedo", "will provide", alidr)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_vis_dif_albedo", "will provide", alvdf)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_ir_dif_albedo", "will provide", alidf)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_albedo_vis_dir", "will provide", alvdr_ai)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_albedo_nir_dir", "will provide", alidr_ai)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_albedo_vis_dif", "will provide", alvdf_ai)
@@ -776,17 +790,10 @@ module cice_cap_mod
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_snow_albedo", "will provide", albsno)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_melt_pond_albedo", "will provide", albpnd)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_apeff_ai", "will provide", apeff_ai)
-
-    allocate(aice_cpl(nx_block,ny_block,max_blocks))
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction", "will provide", aice_cpl)
-
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal", "will provide", strocnxT)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid", "will provide", strocnyT)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_fresh_water_flx_to_ponds", "will provide", fpond)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_fresh_water_to_ocean_rate", "will provide", fresh)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_salt_rate", "will provide", fsalt)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_net_heat_flx_to_ocn", "will provide", fhocn)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocean", "will provide", fswthru)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_faero_ocn", "will provide", faero_ocn)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_strairx_ocn", "will provide", strairx_ocn)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_strairy_ocn", "will provide", strairy_ocn)
