@@ -57,6 +57,7 @@ module cice_cap_mod
   integer :: lsize    ! local number of gridcells for coupling
   real(ESMF_KIND_R8), allocatable,target :: aice_cpl(:,:,:)
   real(ESMF_KIND_R8), allocatable,target :: icetemp_cpl(:,:,:)
+  real(ESMF_KIND_R8), allocatable,target :: dummyfield(:,:,:)
   character(len=256) :: tmpstr
 
   contains
@@ -333,7 +334,9 @@ module cice_cap_mod
     type(ESMF_State)                       :: importState, exportState
     type(ESMF_Time)                        :: currTime
     type(ESMF_TimeInterval)                :: timeStep
+    type(ESMF_Field)                       :: lfield
     type(block)                            :: this_block
+    character(len=64)                      :: fldname
     integer                                :: i,j,iblk,n,i2,j2
     integer                                :: ilo,ihi,jlo,jhi
 
@@ -396,6 +399,7 @@ module cice_cap_mod
 
     aice_cpl = 0.
     icetemp_cpl = 0.
+    dummyfield = 0.
     do iblk = 1,nblocks
        do j = 1,ny_block
        do i = 1,nx_block
@@ -412,12 +416,24 @@ module cice_cap_mod
     call state_diagnose(exportState, 'cice_export', rc)
 
     export_slice = export_slice + 1
-    call NUOPC_StateWrite(exportState, filePrefix='field_ice_export_', &
-      timeslice=export_slice, relaxedFlag=.true., rc=rc) 
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+!    call NUOPC_StateWrite(exportState, filePrefix='field_ice_export_', &
+!      timeslice=export_slice, relaxedFlag=.true., rc=rc) 
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!      line=__LINE__, &
+!      file=__FILE__)) &
+!      return  ! bail out
+    ! tcraig, skip first field (dummyfield) due to StateWrite errors
+    do i = 2,fldsFrIce_num
+      fldname = fldsFrIce(i)%shortname
+      call ESMF_StateGet(exportState, itemName=trim(fldname), field=lfield, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+      call NUOPC_FieldWrite(lfield, file='field_ice_export_'//trim(fldname)//'.nc', &
+        timeslice=export_slice, relaxedFlag=.true., rc=rc) 
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+    enddo
 
     write(*,*) 'CICE: --- run phase called --- 4'
 
@@ -710,23 +726,24 @@ module cice_cap_mod
 
 ! tcraig, don't point directly into cice data YET (last field is optional in interface)
 ! instead, create space for the field when it's "realized".
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height10m", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_pres_height_surface", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dir_flx", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dif_flx", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dir_flx", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_ir_dif_flx", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_prec_rate", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "mean_fprec_rate", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_zonal", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_merid", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "s_surf", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal", "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mixed_layer_depth", "will provide")
 
@@ -762,23 +779,24 @@ module cice_cap_mod
 
     allocate(aice_cpl   (nx_block,ny_block,max_blocks))
     allocate(icetemp_cpl(nx_block,ny_block,max_blocks))
+    allocate(dummyfield (nx_block,ny_block,max_blocks))
 
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction", "will provide", aice_cpl)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature", "will provide", icetemp_cpl)
-
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal", "will provide", strairxT)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid", "will provide", strairyT)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx_atm_into_ice", "will provide", flat)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "dummyfield"                      , "will provide", dummyfield)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"             , "will provide", icetemp_cpl)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo"         , "will provide", alvdr)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo"          , "will provide", alidr)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo"         , "will provide", alvdf)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo"          , "will provide", alidf)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction"                    , "will provide", aice_cpl)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal"         , "will provide", strairxT)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid"         , "will provide", strairyT)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal"         , "will provide", strocnxT)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid"         , "will provide", strocnyT)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocn"              , "will provide", fswthru)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_up_lw_flx_ice"              , "will provide", flwout)
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sensi_heat_flx_atm_into_ice", "will provide", fsens)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_up_lw_flx_ice", "will provide", flwout)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_evap_rate_atm_into_ice", "will provide", evap)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo", "will provide", alvdr)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo" , "will provide", alidr)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo", "will provide", alvdf)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo" , "will provide", alidf)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal", "will provide", strocnxT)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid", "will provide", strocnyT)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocn", "will provide", fswthru)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx_atm_into_ice", "will provide", flat)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_evap_rate_atm_into_ice"     , "will provide", evap)
 
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_temp_height2m", "will provide", Tref)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_inst_spec_humid_height2m", "will provide", Qref)
