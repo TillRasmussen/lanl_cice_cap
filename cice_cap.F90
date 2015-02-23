@@ -359,12 +359,15 @@ module cice_cap_mod
        write(tmpstr,'(a,5i8)') subname//' iblk corner bnds ',iblk,lbnd,ubnd
        call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
 
+       ! ULON and ULAT are upper right hand corner from TLON and TLAT
+       ! corners in ESMF need to be defined lon lower left corner from center
+       ! ULON and ULAT have ghost cells, leverage that to fill corner arrays
        do j1 = lbnd(2),ubnd(2)
        do i1 = lbnd(1),ubnd(1)
           i = i1 + ilo - lbnd(1)
           j = j1 + jlo - lbnd(2)
-          coordXcorner(i1,j1) = ULON(i,j,iblk) * rad_to_deg
-          coordYcorner(i1,j1) = ULAT(i,j,iblk) * rad_to_deg
+          coordXcorner(i1,j1) = ULON(i-1,j-1,iblk) * rad_to_deg
+          coordYcorner(i1,j1) = ULAT(i-1,j-1,iblk) * rad_to_deg
        enddo
        enddo
 
@@ -530,6 +533,7 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_fmpot(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_mld(:,:,:)
     ! exports
+    real(ESMF_KIND_R8), pointer :: dataPtr_mask(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_ifrac(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_itemp(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_alvdr(:,:,:)
@@ -703,6 +707,8 @@ module cice_cap_mod
     !---- local modifications to coupling fields -----
     !---- good place to rotate vectors           -----
 
+    call State_getFldPtr(exportState,'ice_mask' ,dataPtr_mask,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'ifrac'    ,dataPtr_ifrac,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'sit'      ,dataPtr_itemp,rc=rc)
@@ -740,8 +746,9 @@ module cice_cap_mod
       lbound(dataPtr_ifrac,3), ubound(dataPtr_ifrac,3)
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
 
-    dataPtr_ifrac = 0.
-    dataPtr_itemp = 0.
+    dataPtr_ifrac = 0._ESMF_KIND_R8
+    dataPtr_itemp = 0._ESMF_KIND_R8
+    dataPtr_mask = 0._ESMF_KIND_R8
     do iblk = 1,nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
        ilo = this_block%ilo
@@ -752,6 +759,7 @@ module cice_cap_mod
        do i = ilo,ihi
           i1 = i - ilo + 1
           j1 = j - jlo + 1
+          if (hm(i,j,iblk) > 0.5) dataPtr_mask(i1,j1,iblk) = 1._ESMF_KIND_R8
           dataPtr_ifrac   (i1,j1,iblk) = aice(i,j,iblk)
           dataPtr_itemp   (i1,j1,iblk) = Tffresh + trcr(i,j,1,iblk)
           dataPtr_alvdr   (i1,j1,iblk) = alvdr(i,j,iblk)
@@ -772,6 +780,9 @@ module cice_cap_mod
        enddo
        enddo
     enddo
+
+    write(tmpstr,*) subname//' mask = ',minval(dataPtr_mask),maxval(dataPtr_mask)
+    call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
 
     !-------------------------------------------------
 
@@ -1211,6 +1222,7 @@ module cice_cap_mod
     call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo"          , "will provide", shortname="iiirdira")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dif_albedo"         , "will provide", shortname="iivisdifa")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dif_albedo"          , "will provide", shortname="iiirdifa")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_mask"                        , "will provide", shortname="ice_mask")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "ice_fraction"                    , "will provide", shortname="ifrac")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_zonal"         , "will provide", shortname="strairxT")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid"         , "will provide", shortname="strairyT")
