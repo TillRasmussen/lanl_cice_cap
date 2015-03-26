@@ -505,7 +505,10 @@ module cice_cap_mod
     type(ESMF_State)                       :: importState, exportState
     type(ESMF_Time)                        :: currTime
     type(ESMF_TimeInterval)                :: timeStep
-    type(ESMF_Field)                       :: lfield
+    type(ESMF_Field)                       :: lfield,lfield2d
+    type(ESMF_Grid)                        :: grid
+    real(ESMF_KIND_R8), pointer            :: fldptr(:,:,:)
+    real(ESMF_KIND_R8), pointer            :: fldptr2d(:,:)
     type(block)                            :: this_block
     character(len=64)                      :: fldname
     integer                                :: i,j,iblk,n,i1,i2,j1,j2
@@ -595,14 +598,16 @@ module cice_cap_mod
     call state_diagnose(importState, 'cice_import', rc)
 
     import_slice = import_slice + 1
-!    call NUOPC_StateWrite(importState, filePrefix='field_ice_import_', &
+
+! causes core dumps and garbage
+!    call NUOPC_StateWrite(importState, filePrefix='fieldNS_ice_import_', &
 !      timeslice=import_slice, relaxedFlag=.true., rc=rc) 
 !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
 !      line=__LINE__, &
 !      file=__FILE__)) &
 !      return  ! bail out
-    ! tcraig, skip first field (dummyfield) due to StateWrite errors
-    do i = 2,fldsToice_num
+
+    do i = 1,fldsToice_num
       fldname = fldsToice(i)%shortname
       call ESMF_StateGet(importState, itemName=trim(fldname), itemType=itemType, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -612,8 +617,56 @@ module cice_cap_mod
       if (itemType /= ESMF_STATEITEM_NOTFOUND) then
         call ESMF_StateGet(importState, itemName=trim(fldname), field=lfield, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
-        call NUOPC_FieldWrite(lfield, file='field_ice_import_'//trim(fldname)//'.nc', &
-          timeslice=import_slice, relaxedFlag=.true., rc=rc) 
+        call ESMF_FieldGet(lfield,grid=grid,rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+        ! create a copy of the 3d data in lfield but in a 2d array, lfield2d
+        lfield2d = ESMF_FieldCreate(grid, ESMF_TYPEKIND_R8, indexflag=ESMF_INDEX_DELOCAL, &
+          name=trim(fldname), rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+
+        call ESMF_FieldGet(lfield  , farrayPtr=fldptr  , rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+        call ESMF_FieldGet(lfield2d, farrayPtr=fldptr2d, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+        fldptr2d(:,:) = fldptr(:,:,1)
+
+! causes core dumps and garbage
+!        call NUOPC_FieldWrite(lfield, file='fieldN3d_ice_import_'//trim(fldname)//'.nc', &
+!          timeslice=import_slice, relaxedFlag=.true., rc=rc) 
+!        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!          line=__LINE__, &
+!          file=__FILE__)) &
+!          return  ! bail out
+
+! causes run time error in usage
+!        call NUOPC_FieldWrite(lfield2d, file='fieldN_ice_import_'//trim(fldname)//'.nc', &
+!          timeslice=import_slice, relaxedFlag=.true., rc=rc) 
+!        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!          line=__LINE__, &
+!          file=__FILE__)) &
+!          return  ! bail out
+
+! causes core dumps and garbage
+!        call ESMF_FieldWrite(lfield, file='field3d_ice_import_'//trim(fldname)//'.nc', &
+!          timeslice=import_slice, rc=rc) 
+!        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!          line=__LINE__, &
+!          file=__FILE__)) &
+!          return  ! bail out
+
+        call ESMF_FieldWrite(lfield2d, file='field_ice_import_'//trim(fldname)//'.nc', &
+          timeslice=import_slice, rc=rc) 
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+
+        call ESMF_FieldDestroy(lfield2d, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__)) &
@@ -789,30 +842,63 @@ module cice_cap_mod
     call state_diagnose(exportState, 'cice_export', rc)
 
     export_slice = export_slice + 1
+
+! causes core dumps and garbage
 !    call NUOPC_StateWrite(exportState, filePrefix='field_ice_export_', &
 !      timeslice=export_slice, relaxedFlag=.true., rc=rc) 
 !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
 !      line=__LINE__, &
 !      file=__FILE__)) &
 !      return  ! bail out
-    ! tcraig, skip first field (dummyfield) due to StateWrite errors
-    do i = 2,fldsFrIce_num
+
+    do i = 1,fldsFrIce_num
       fldname = fldsFrIce(i)%shortname
       call ESMF_StateGet(exportState, itemName=trim(fldname), itemType=itemType, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
-      if (itemType /= ESMF_STATEITEM_NOTFOUND .and. (fldname=='ice_fraction' .or. fldname=='sea_ice_temperature')) then
-!      if (itemType /= ESMF_STATEITEM_NOTFOUND) then
+      if (itemType /= ESMF_STATEITEM_NOTFOUND) then
         call ESMF_StateGet(exportState, itemName=trim(fldname), field=lfield, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+        call ESMF_FieldGet(lfield,grid=grid,rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+        ! create a copy of the 3d data in lfield but in a 2d array, lfield2d
+        lfield2d = ESMF_FieldCreate(grid, ESMF_TYPEKIND_R8, indexflag=ESMF_INDEX_DELOCAL, &
+          name=trim(fldname), rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+
+        call ESMF_FieldGet(lfield  , farrayPtr=fldptr  , rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+        call ESMF_FieldGet(lfield2d, farrayPtr=fldptr2d, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+        fldptr2d(:,:) = fldptr(:,:,1)
+
+! causes core dumps and garbage
 !        call NUOPC_FieldWrite(lfield, file='field_ice_export_'//trim(fldname)//'.nc', &
 !          timeslice=export_slice, relaxedFlag=.true., rc=rc) 
 !        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
 !          line=__LINE__, &
 !          file=__FILE__)) &
 !          return  ! bail out
+
+        call ESMF_FieldWrite(lfield2d, file='field_ice_export_'//trim(fldname)//'.nc', &
+          timeslice=export_slice, rc=rc) 
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+
+        call ESMF_FieldDestroy(lfield2d, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
       endif
     enddo
 
@@ -1148,7 +1234,6 @@ module cice_cap_mod
 
 ! tcraig, don't point directly into cice data YET (last field is optional in interface)
 ! instead, create space for the field when it's "realized".
-    call fld_list_add(fldsToIce_num, fldsToIce, "dummyfield"               , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m"       , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m" , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide")
@@ -1200,7 +1285,6 @@ module cice_cap_mod
 
 !--------- export fields from Sea Ice -------------
 
-!tcx    call fld_list_add(fldsFrIce_num, fldsFrIce, "dummyfield"                      , "will provide", dummyfield)
 !tcx    call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"             , "will provide", icetemp_cpl)
 !tcx    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo"         , "will provide", alvdr)
 !tcx    call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo"          , "will provide", alidr)
@@ -1216,7 +1300,6 @@ module cice_cap_mod
 !    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sensi_heat_flx_atm_into_ice", "will provide", fsens)
 !    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx_atm_into_ice", "will provide", flat)
 !tcx    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_evap_rate_atm_into_ice"     , "will provide", evap)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, "dummyfield"                      , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "sea_ice_temperature"             , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_vis_dir_albedo"         , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "inst_ice_ir_dir_albedo"          , "will provide")
