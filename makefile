@@ -1,9 +1,9 @@
+# User must customize the following two make variables
+INSTALLDIR=/home/$(USER)/ICE-INSTALLS/CICE_$(installdate)
+LANLCICEDIR=/home/Fei.Liu/noscrub/lanl_cice
 
 #installdate=latest
 installdate := $(shell date '+%Y-%m-%d-%H-%M-%S')
-INSTALLDIR=/home/$(USER)/ICE-INSTALLS/CICE_$(installdate)
-LANLCICEGITDIR=/home/Fei.Liu/github/lanl_cice
-LANLCICEDIR=/home/Fei.Liu/noscrub/lanl_cice
 
 ifneq ($(origin ESMFMKFILE), environment)
 $(error Environment variable ESMFMKFILE was not set.)
@@ -28,7 +28,7 @@ LIBRARY  = libcice.a
 
 MODULES  = cice_cap.o
 
-all default:
+all default: 
 	@gmake -f $(MAKEFILE) $(LIBRARY)
 
 $(LIBRARY): $(MODULES)
@@ -47,5 +47,5 @@ $(LIBRARY): $(MODULES)
 	cp -f cice.mk.install $(INSTALLDIR)/cice.mk
 
 clean:
-	$(RM) -f $(LIBRARY) *.f90 *.o *.mod *.lst depend
 
+	$(RM) -f $(LIBRARY) *.f90 *.o *.mod *.lst depend
