@@ -1,6 +1,6 @@
 # User must customize the following two make variables
 INSTALLDIR=/home/$(USER)/ICE-INSTALLS/CICE_$(installdate)
-LANLCICEDIR=/home/Fei.Liu/noscrub/lanl_cice
+LANLCICEDIR=/home/Anthony.Craig/lanl_cice
 
 #installdate=latest
 installdate := $(shell date '+%Y-%m-%d-%H-%M-%S')

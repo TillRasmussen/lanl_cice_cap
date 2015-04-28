@@ -181,6 +181,7 @@ module cice_cap_mod
     type(ESMF_Grid)                        :: gridIn
     type(ESMF_Grid)                        :: gridOut
     type(ESMF_DistGrid)                    :: distgrid
+    type(ESMF_DistGridConnection), allocatable :: connectionList(:)
     integer                                :: npet
     integer                                :: i,j,iblk, n, i1,j1, DE
     integer                                :: ilo,ihi,jlo,jhi
@@ -246,17 +247,27 @@ module cice_cap_mod
     delayout = ESMF_DELayoutCreate(petMap, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
+    allocate(connectionList(1))
+    call ESMF_DistGridConnectionSet(connectionList(1), tileIndexA=1, &
+      tileIndexB=1, positionVector=(/nx_global, 0/), rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
     distgrid = ESMF_DistGridCreate(minIndex=(/1,1/), maxIndex=(/nx_global,ny_global/), &
 !        indexflag = ESMF_INDEX_DELOCAL, &
         deBlockList=deBlockList, &
 !        deLabelList=deLabelList, &
         delayout=delayout, &
+        connectionList=connectionList, &
         rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
     deallocate(deLabelList)
     deallocate(deBlockList)
     deallocate(petMap)
+    deallocate(connectionList)
 
 !    call ESMF_DistGridPrint(distgrid=distgrid, rc=rc)
 !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -285,6 +296,7 @@ module cice_cap_mod
 
     gridIn = ESMF_GridCreate(distgrid=distgrid, &
        coordSys = ESMF_COORDSYS_SPH_DEG, &
+       gridEdgeLWidth=(/0,0/), gridEdgeUWidth=(/0,1/), &
        rc = rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
 
@@ -652,6 +664,11 @@ module cice_cap_mod
 !          return  ! bail out
 
 ! causes core dumps and garbage
+!        call ESMF_FieldPrint(lfield,rc=rc)
+!        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+!          line=__LINE__, &
+!          file=__FILE__)) &
+!          return  ! bail out
 !        call ESMF_FieldWrite(lfield, file='field3d_ice_import_'//trim(fldname)//'.nc', &
 !          timeslice=import_slice, rc=rc) 
 !        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
