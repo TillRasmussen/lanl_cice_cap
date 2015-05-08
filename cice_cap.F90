@@ -16,7 +16,7 @@ module cice_cap_mod
   use ice_distribution, only: ice_distributiongetblockloc
   use ice_constants, only: Tffresh, rad_to_deg
   use ice_flux
-  use ice_grid, only: TLAT, TLON, ULAT, ULON, hm, tarea
+  use ice_grid, only: TLAT, TLON, ULAT, ULON, hm, tarea, ANGLET, ANGLE
   use ice_state
   use CICE_RunMod
   use CICE_InitMod
@@ -691,6 +691,14 @@ module cice_cap_mod
       endif
     enddo
 
+    ! CW rotation applied to incoming 2D vectors
+    call RotateVectors(importState, (/'inst_zonal_wind_height10m', 'inst_merid_wind_height10m'/), 1, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call RotateVectors(importState, (/'sea_surface_slope_zonal', 'sea_surface_slope_zonal'/), 1, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call RotateVectors(importState, (/'ocn_current_zonal', 'ocn_current_merid'/), 1, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+
     call State_getFldPtr(importState,'inst_temp_height2m',dataPtr_ith2m,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'inst_spec_humid_height2m',dataPtr_ishh2m,rc=rc)
@@ -850,6 +858,12 @@ module cice_cap_mod
        enddo
        enddo
     enddo
+
+    ! CCW rotation applied to outgoing 2D vectors
+    call RotateVectors(exportState, (/'stress_on_air_ice_zonal', 'stress_on_air_ice_merid'/), -1, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call RotateVectors(exportState, (/'stress_on_ocn_ice_zonal', 'stress_on_ocn_ice_merid'/), -1, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
 
     write(tmpstr,*) subname//' mask = ',minval(dataPtr_mask),maxval(dataPtr_mask)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
@@ -1405,6 +1419,42 @@ module cice_cap_mod
     endif
 
   end subroutine fld_list_add
+
+  subroutine RotateVectors(State, FieldComponents2D, rot_dir, rc)
+
+    type(ESMF_State)               :: State
+    character(len=*), intent(in)   :: FieldComponents2D(:)
+    integer, intent(in)            :: rot_dir
+    integer, intent(out)           :: rc
+
+    real(ESMF_KIND_R8), dimension(:,:,:), pointer :: x, xp
+    real(ESMF_KIND_R8), dimension(:,:,:), pointer :: y, yp
+    integer                                       :: i,j,k
+
+    rc = ESMF_SUCCESS
+
+    call State_getFldPtr(State,FieldComponents2D(1), x, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(State,FieldComponents2D(2), y, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+
+    allocate(xp(lbound(x,1):ubound(x,1), lbound(x,2):ubound(x,2),lbound(x,3):ubound(x,3)) )
+    allocate(yp(lbound(y,1):ubound(y,1), lbound(y,2):ubound(y,2),lbound(y,3):ubound(y,3)) )
+
+    do k = lbound(x, 3), ubound(x, 3)
+      do i = lbound(x, 2), ubound(x, 2)
+        do j = lbound(x, 1), ubound(x, 1)
+          xp(i,j,k) = x(i,j,k)*cos(ANGLET(i,j,k)) + rot_dir*y(i,j,k)*sin(ANGLET(i,j,k))
+          yp(i,j,k) = x(i,j,k)*cos(ANGLET(i,j,k)) - rot_dir*y(i,j,k)*sin(ANGLET(i,j,k))
+          x(i,j,k) = xp(i,j,k)
+          y(i,j,k) = yp(i,j,k)
+        enddo
+      enddo
+    enddo
+
+    deallocate(xp, yp)
+
+  end subroutine
 
   !-----------------------------------------------------------------------------
 end module cice_cap_mod
