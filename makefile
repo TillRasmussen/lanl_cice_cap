@@ -41,8 +41,9 @@ $(LIBRARY): $(MODULES)
 	@echo "ESMF_DEP_FRONT     = cice_cap_mod" >> cice.mk.install
 	@echo "ESMF_DEP_INCPATH   = $(INSTALLDIR)" >> cice.mk.install
 	@echo "ESMF_DEP_CMPL_OBJS = " >> cice.mk.install
-	@echo "ESMF_DEP_LINK_OBJS = $(INSTALLDIR)/libcice.a $(LANLCICEDIR)/liblanl_cice.a" >> cice.mk.install
+	@echo "ESMF_DEP_LINK_OBJS = $(INSTALLDIR)/libcice.a $(INSTALLDIR)/liblanl_cice.a" >> cice.mk.install
 	mkdir -p $(INSTALLDIR)
+	cp -f $(LANLCICEDIR)/liblanl_cice.a $(INSTALLDIR) 
 	cp -f libcice.a cice_cap_mod.mod $(INSTALLDIR) 
 	cp -f cice.mk.install $(INSTALLDIR)/cice.mk
 

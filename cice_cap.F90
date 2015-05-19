@@ -692,12 +692,12 @@ module cice_cap_mod
     enddo
 
     ! CW rotation applied to incoming 2D vectors
-    call RotateVectors(importState, (/'inst_zonal_wind_height10m', 'inst_merid_wind_height10m'/), 1, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call RotateVectors(importState, (/'sea_surface_slope_zonal', 'sea_surface_slope_zonal'/), 1, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call RotateVectors(importState, (/'ocn_current_zonal', 'ocn_current_merid'/), 1, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+!    call RotateVectors(importState, (/'inst_zonal_wind_height10m', 'inst_merid_wind_height10m'/), 1, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+!    call RotateVectors(importState, (/'sea_surface_slope_zonal', 'sea_surface_slope_zonal'/), 1, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+!    call RotateVectors(importState, (/'ocn_current_zonal', 'ocn_current_merid'/), 1, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
 
     call State_getFldPtr(importState,'inst_temp_height2m',dataPtr_ith2m,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
@@ -860,10 +860,10 @@ module cice_cap_mod
     enddo
 
     ! CCW rotation applied to outgoing 2D vectors
-    call RotateVectors(exportState, (/'stress_on_air_ice_zonal', 'stress_on_air_ice_merid'/), -1, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call RotateVectors(exportState, (/'stress_on_ocn_ice_zonal', 'stress_on_ocn_ice_merid'/), -1, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+!    call RotateVectors(exportState, (/'stress_on_air_ice_zonal', 'stress_on_air_ice_merid'/), -1, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+!    call RotateVectors(exportState, (/'stress_on_ocn_ice_zonal', 'stress_on_ocn_ice_merid'/), -1, rc=rc)
+!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
 
     write(tmpstr,*) subname//' mask = ',minval(dataPtr_mask),maxval(dataPtr_mask)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
