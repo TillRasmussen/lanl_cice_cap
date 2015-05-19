@@ -525,6 +525,7 @@ module cice_cap_mod
     character(len=64)                      :: fldname
     integer                                :: i,j,iblk,n,i1,i2,j1,j2
     integer                                :: ilo,ihi,jlo,jhi
+    real(ESMF_KIND_R8)                     :: ue, vn, ui, vj
     type(ESMF_StateItem_Flag)              :: itemType
     ! imports
     real(ESMF_KIND_R8), pointer :: dataPtr_ith2m(:,:,:)
@@ -691,14 +692,6 @@ module cice_cap_mod
       endif
     enddo
 
-    ! CW rotation applied to incoming 2D vectors
-!    call RotateVectors(importState, (/'inst_zonal_wind_height10m', 'inst_merid_wind_height10m'/), 1, rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-!    call RotateVectors(importState, (/'sea_surface_slope_zonal', 'sea_surface_slope_zonal'/), 1, rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-!    call RotateVectors(importState, (/'ocn_current_zonal', 'ocn_current_merid'/), 1, rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-
     call State_getFldPtr(importState,'inst_temp_height2m',dataPtr_ith2m,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'inst_spec_humid_height2m',dataPtr_ishh2m,rc=rc)
@@ -750,26 +743,34 @@ module cice_cap_mod
        do i = ilo,ihi
           i1 = i - ilo + 1
           j1 = j - jlo + 1
-!          Tair   (i,j,iblk) = dataPtr_ith2m  (i1,j1,iblk)
-!          Qa     (i,j,iblk) = dataPtr_ishh2m (i1,j1,iblk)
-!          strax  (i,j,iblk) = dataPtr_izwh10m(i1,j1,iblk)
-!          stray  (i,j,iblk) = dataPtr_imwh10m(i1,j1,iblk)
-!          zlvl   (i,j,iblk) = dataPtr_ips    (i1,j1,iblk)
-!          flw    (i,j,iblk) = dataPtr_mdlwfx (i1,j1,iblk)
-!          swvdr  (i,j,iblk) = dataPtr_swvr   (i1,j1,iblk)
-!          swvdf  (i,j,iblk) = dataPtr_swvf   (i1,j1,iblk)
-!          swidr  (i,j,iblk) = dataPtr_swir   (i1,j1,iblk)
-!          swidf  (i,j,iblk) = dataPtr_swif   (i1,j1,iblk)
-!          frain  (i,j,iblk) = dataPtr_lprec  (i1,j1,iblk)
-!          ??     (i,j,iblk) = dataPtr_fprec  (i1,j1,iblk)
-!          sst    (i,j,iblk) = dataPtr_sst    (i1,j1,iblk)
-!          sss    (i,j,iblk) = dataPtr_sss    (i1,j1,iblk)
-!          ss_tltx(i,j,iblk) = dataPtr_sssz   (i1,j1,iblk)
-!          ss_tlty(i,j,iblk) = dataPtr_sssm   (i1,j1,iblk)
-!          uocn   (i,j,iblk) = dataPtr_ocncz  (i1,j1,iblk)
-!          vocn   (i,j,iblk) = dataPtr_ocncm  (i1,j1,iblk)
-!          frzmlt (i,j,iblk) = dataPtr_fmpot  (i1,j1,iblk)
-!          hmix   (i,j,iblk) = dataPtr_mld    (i1,j1,iblk)
+! air density?  current surface flux scheme has constant air density, this could be changed
+!          Tair   (i,j,iblk) = dataPtr_ith2m  (i1,j1,iblk)  ! near surface temp, maybe lowest level
+!          Qa     (i,j,iblk) = dataPtr_ishh2m (i1,j1,iblk)  ! near surface humidity, maybe lowest level
+!          zlvl   (i,j,iblk) = dataPtr_ips    (i1,j1,iblk)  ! height of the lowest level (m)
+!          flw    (i,j,iblk) = dataPtr_mdlwfx (i1,j1,iblk)  ! downwelling longwave flux
+!          swvdr  (i,j,iblk) = dataPtr_swvr   (i1,j1,iblk)  ! downwelling shortwave flux, vis dir
+!          swvdf  (i,j,iblk) = dataPtr_swvf   (i1,j1,iblk)  ! downwelling shortwave flux, vis dif
+!          swidr  (i,j,iblk) = dataPtr_swir   (i1,j1,iblk)  ! downwelling shortwave flux, nir dir
+!          swidf  (i,j,iblk) = dataPtr_swif   (i1,j1,iblk)  ! downwelling shortwave flux, nir dif
+!          frain  (i,j,iblk) = dataPtr_lprec  (i1,j1,iblk)  ! flux of rain (liquid only)
+!          fsnow??(i,j,iblk) = dataPtr_fprec  (i1,j1,iblk)  ! flux of frozen precip  
+!          sst    (i,j,iblk) = dataPtr_sst    (i1,j1,iblk)  ! sea surface temp (may not be needed?)
+!          sss    (i,j,iblk) = dataPtr_sss    (i1,j1,iblk)  ! sea surface salinity (maybe for mushy layer)
+!          frzmlt (i,j,iblk) = dataPtr_fmpot  (i1,j1,iblk)  ! availability of ocean heat content (or freezing potential, use all if freezing)
+!          hmix   (i,j,iblk) = dataPtr_mld    (i1,j1,iblk)  ! ocean mixed layer depth (may not be needed?)
+!          ! --- rotate these vectors from east/north to i/j ---
+!          ue = dataPtr_izwh10m(i1,j1,iblk)
+!          vn = dataPtr_imwh10m(i1,j1,iblk)
+!          strax  (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! lowest level wind (strax is a wind)
+!          stray  (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))  ! lowest level wind (stray is a wind)
+!          ue = dataPtr_sssz   (i1,j1,iblk)
+!          vn = dataPtr_sssm   (i1,j1,iblk)
+!          ss_tltx(i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! sea surface height gradient (small effect)
+!          ss_tlty(i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))  ! sea surface height gradient (small effect)
+!          ue = dataPtr_ocncz  (i1,j1,iblk)
+!          vn = dataPtr_ocncm  (i1,j1,iblk)
+!          uocn   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! ocean current
+!          vocn   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))  ! ocean current
 !!          write(tmpstr,'(a,3i6,2x,g17.7)') subname//' sst = ',i,j,iblk,dataPtr_sst(i,j,iblk)
 !!          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
        enddo
@@ -783,7 +784,6 @@ module cice_cap_mod
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
 
     !---- local modifications to coupling fields -----
-    !---- good place to rotate vectors           -----
 
     call State_getFldPtr(exportState,'ice_mask',dataPtr_mask,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
@@ -838,32 +838,38 @@ module cice_cap_mod
           i1 = i - ilo + 1
           j1 = j - jlo + 1
           if (hm(i,j,iblk) > 0.5) dataPtr_mask(i1,j1,iblk) = 1._ESMF_KIND_R8
-          dataPtr_ifrac   (i1,j1,iblk) = aice(i,j,iblk)
-          dataPtr_itemp   (i1,j1,iblk) = Tffresh + trcr(i,j,1,iblk)
-          dataPtr_alvdr   (i1,j1,iblk) = alvdr(i,j,iblk)
-          dataPtr_alidr   (i1,j1,iblk) = alidr(i,j,iblk)
-          dataPtr_alvdf   (i1,j1,iblk) = alvdf(i,j,iblk)
-          dataPtr_alidf   (i1,j1,iblk) = alidf(i,j,iblk)
-          dataPtr_strairxT(i1,j1,iblk) = strairxT(i,j,iblk)
-          dataPtr_strairyT(i1,j1,iblk) = strairyT(i,j,iblk)
-          dataPtr_strocnxT(i1,j1,iblk) = strocnxT(i,j,iblk)
-          dataPtr_strocnyT(i1,j1,iblk) = strocnyT(i,j,iblk)
-          dataPtr_fswthru (i1,j1,iblk) = fswthru(i,j,iblk)
-          dataPtr_flwout  (i1,j1,iblk) = flwout(i,j,iblk)
-          dataPtr_fsens   (i1,j1,iblk) = fsens(i,j,iblk)
-          dataPtr_flat    (i1,j1,iblk) = flat(i,j,iblk)
-          dataPtr_evap    (i1,j1,iblk) = evap(i,j,iblk)
+          dataPtr_ifrac   (i1,j1,iblk) = aice(i,j,iblk)   ! ice fraction (0-1)
+          dataPtr_itemp   (i1,j1,iblk) = Tffresh + trcr(i,j,1,iblk)  ! surface temperature of ice covered portion (degK)
+          dataPtr_alvdr   (i1,j1,iblk) = alvdr(i,j,iblk)  ! albedo vis dir
+          dataPtr_alidr   (i1,j1,iblk) = alidr(i,j,iblk)  ! albedo nir dir
+          dataPtr_alvdf   (i1,j1,iblk) = alvdf(i,j,iblk)  ! albedo vis dif
+          dataPtr_alidf   (i1,j1,iblk) = alidf(i,j,iblk)  ! albedo nir dif
+          dataPtr_fswthru (i1,j1,iblk) = fswthru(i,j,iblk) ! flux of shortwave through ice to ocean
+! could change this to be total gridcell fluxes including the ocean, this would imply atm-ocean
+!   fluxes are computed here.  requires some minor changes in cice to do that.
+!   turn on slab ocean coupling.
+! important scientifically to compute surface heat fluxes in ocean and ice separately and even in each ice category separately.
+! fluxes might be weighted by ice fraction already, need to check.
+! need meltwater sent to the ocean?
+! need heat potential taken up from the ocean?  related to frzmlt.  (always = if freezing, <= if melting)
+          dataPtr_flwout  (i1,j1,iblk) = flwout(i,j,iblk) ! longwave outgoing (upward), average over ice fraction only
+          dataPtr_fsens   (i1,j1,iblk) = fsens(i,j,iblk)  ! sensible
+          dataPtr_flat    (i1,j1,iblk) = flat(i,j,iblk)   ! latent
+          dataPtr_evap    (i1,j1,iblk) = evap(i,j,iblk)   ! evaporation (not ~latent, need separate field)
+          ! --- rotate these vectors from i/j to east/north ---
+          ui = strairxT(i,j,iblk)
+          vj = strairyT(i,j,iblk)
+          dataPtr_strairxT(i1,j1,iblk) = ui*cos(ANGLET(i,j,iblk)) - vj*sin(ANGLET(i,j,iblk))  ! air ice stress
+          dataPtr_strairyT(i1,j1,iblk) = ui*cos(ANGLET(i,j,iblk)) + vj*sin(ANGLET(i,j,iblk))  ! air ice stress
+          ui = strocnxT(i,j,iblk)
+          vj = strocnyT(i,j,iblk)
+          dataPtr_strocnxT(i1,j1,iblk) = ui*cos(ANGLET(i,j,iblk)) - vj*sin(ANGLET(i,j,iblk))  ! ice ocean stress
+          dataPtr_strocnyT(i1,j1,iblk) = ui*cos(ANGLET(i,j,iblk)) + vj*sin(ANGLET(i,j,iblk))  ! ice ocean stress
 !!          write(tmpstr,'(a,3i6,2x,g17.7)') subname//' aice = ',i,j,iblk,dataPtr_ifrac(i,j,iblk)
 !!          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
        enddo
        enddo
     enddo
-
-    ! CCW rotation applied to outgoing 2D vectors
-!    call RotateVectors(exportState, (/'stress_on_air_ice_zonal', 'stress_on_air_ice_merid'/), -1, rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-!    call RotateVectors(exportState, (/'stress_on_ocn_ice_zonal', 'stress_on_ocn_ice_merid'/), -1, rc=rc)
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
 
     write(tmpstr,*) subname//' mask = ',minval(dataPtr_mask),maxval(dataPtr_mask)
     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
@@ -1419,42 +1425,6 @@ module cice_cap_mod
     endif
 
   end subroutine fld_list_add
-
-  subroutine RotateVectors(State, FieldComponents2D, rot_dir, rc)
-
-    type(ESMF_State)               :: State
-    character(len=*), intent(in)   :: FieldComponents2D(:)
-    integer, intent(in)            :: rot_dir
-    integer, intent(out)           :: rc
-
-    real(ESMF_KIND_R8), dimension(:,:,:), pointer :: x, xp
-    real(ESMF_KIND_R8), dimension(:,:,:), pointer :: y, yp
-    integer                                       :: i,j,k
-
-    rc = ESMF_SUCCESS
-
-    call State_getFldPtr(State,FieldComponents2D(1), x, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(State,FieldComponents2D(2), y, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-
-    allocate(xp(lbound(x,1):ubound(x,1), lbound(x,2):ubound(x,2),lbound(x,3):ubound(x,3)) )
-    allocate(yp(lbound(y,1):ubound(y,1), lbound(y,2):ubound(y,2),lbound(y,3):ubound(y,3)) )
-
-    do k = lbound(x, 3), ubound(x, 3)
-      do i = lbound(x, 2), ubound(x, 2)
-        do j = lbound(x, 1), ubound(x, 1)
-          xp(i,j,k) = x(i,j,k)*cos(ANGLET(i,j,k)) + rot_dir*y(i,j,k)*sin(ANGLET(i,j,k))
-          yp(i,j,k) = x(i,j,k)*cos(ANGLET(i,j,k)) - rot_dir*y(i,j,k)*sin(ANGLET(i,j,k))
-          x(i,j,k) = xp(i,j,k)
-          y(i,j,k) = yp(i,j,k)
-        enddo
-      enddo
-    enddo
-
-    deallocate(xp, yp)
-
-  end subroutine
 
   !-----------------------------------------------------------------------------
 end module cice_cap_mod
