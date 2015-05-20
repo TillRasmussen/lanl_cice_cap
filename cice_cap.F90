@@ -747,11 +747,11 @@ module cice_cap_mod
 !          Tair   (i,j,iblk) = dataPtr_ith2m  (i1,j1,iblk)  ! near surface temp, maybe lowest level
 !          Qa     (i,j,iblk) = dataPtr_ishh2m (i1,j1,iblk)  ! near surface humidity, maybe lowest level
 !          zlvl   (i,j,iblk) = dataPtr_ips    (i1,j1,iblk)  ! height of the lowest level (m)
-!          flw    (i,j,iblk) = dataPtr_mdlwfx (i1,j1,iblk)  ! downwelling longwave flux
-!          swvdr  (i,j,iblk) = dataPtr_swvr   (i1,j1,iblk)  ! downwelling shortwave flux, vis dir
-!          swvdf  (i,j,iblk) = dataPtr_swvf   (i1,j1,iblk)  ! downwelling shortwave flux, vis dif
-!          swidr  (i,j,iblk) = dataPtr_swir   (i1,j1,iblk)  ! downwelling shortwave flux, nir dir
-!          swidf  (i,j,iblk) = dataPtr_swif   (i1,j1,iblk)  ! downwelling shortwave flux, nir dif
+          flw    (i,j,iblk) = dataPtr_mdlwfx (i1,j1,iblk)  ! downwelling longwave flux
+          swvdr  (i,j,iblk) = dataPtr_swvr   (i1,j1,iblk)  ! downwelling shortwave flux, vis dir
+          swvdf  (i,j,iblk) = dataPtr_swvf   (i1,j1,iblk)  ! downwelling shortwave flux, vis dif
+          swidr  (i,j,iblk) = dataPtr_swir   (i1,j1,iblk)  ! downwelling shortwave flux, nir dir
+          swidf  (i,j,iblk) = dataPtr_swif   (i1,j1,iblk)  ! downwelling shortwave flux, nir dif
 !          frain  (i,j,iblk) = dataPtr_lprec  (i1,j1,iblk)  ! flux of rain (liquid only)
 !          fsnow??(i,j,iblk) = dataPtr_fprec  (i1,j1,iblk)  ! flux of frozen precip  
 !          sst    (i,j,iblk) = dataPtr_sst    (i1,j1,iblk)  ! sea surface temp (may not be needed?)
