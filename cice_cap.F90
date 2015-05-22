@@ -24,10 +24,11 @@ module cice_cap_mod
 
   use ESMF
   use NUOPC
-  use NUOPC_Model, only: &
+  use NUOPC_Model, &
     model_routine_SS      => SetServices, &
     model_label_SetClock  => label_SetClock, &
-    model_label_Advance   => label_Advance
+    model_label_Advance   => label_Advance, &
+    model_label_Finalize  => label_Finalize
 
   implicit none
   private
@@ -77,33 +78,34 @@ module cice_cap_mod
     rc = ESMF_SUCCESS
     
     ! the NUOPC model component will register the generic methods
-    call model_routine_SS(gcomp, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
-    ! set entry point for methods that require specific implementation
-    call ESMF_GridCompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
-      userRoutine=InitializeP1, phase=1, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call ESMF_GridCompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
-      userRoutine=InitializeP2, phase=2, rc=rc)
+    call NUOPC_CompDerive(gcomp, model_routine_SS, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
 
-    call ESMF_GridCompSetEntryPoint(gcomp, ESMF_METHOD_FINALIZE, &
-      userRoutine=cice_model_finalize, rc=rc)
+    ! switching to IPD versions
+    call ESMF_GridCompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
+      userRoutine=InitializeP0, phase=0, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
-    
+
+    ! set entry point for methods that require specific implementation
+    call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
+      phaseLabelList=(/"IPDv01p1"/), userRoutine=InitializeAdvertise, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
+      phaseLabelList=(/"IPDv01p3"/), userRoutine=InitializeRealize, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
     ! attach specializing method(s)
     ! No need to change clock settings
     call ESMF_MethodAdd(gcomp, label=model_label_SetClock, &
@@ -120,11 +122,40 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
 
+    call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Finalize, &
+      specRoutine=cice_model_finalize, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
     call CICE_FieldsSetup()
 
   end subroutine
 
-  subroutine InitializeP1(gcomp, importState, exportState, clock, rc)
+  !-----------------------------------------------------------------------------
+
+  subroutine InitializeP0(gcomp, importState, exportState, clock, rc)
+    type(ESMF_GridComp)   :: gcomp
+    type(ESMF_State)      :: importState, exportState
+    type(ESMF_Clock)      :: clock
+    integer, intent(out)  :: rc
+    
+    rc = ESMF_SUCCESS
+
+    ! Switch to IPDv01 by filtering all other phaseMap entries
+    call NUOPC_CompFilterPhaseMap(gcomp, ESMF_METHOD_INITIALIZE, &
+      acceptStringList=(/"IPDv01p"/), rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    
+  end subroutine
+  
+  !-----------------------------------------------------------------------------
+
+  subroutine InitializeAdvertise(gcomp, importState, exportState, clock, rc)
 
     type(ESMF_GridComp)                    :: gcomp
     type(ESMF_State)                       :: importState, exportState
@@ -134,7 +165,7 @@ module cice_cap_mod
     ! Local Variables
     type(ESMF_VM)                          :: vm
     integer                                :: mpi_comm
-    character(len=*),parameter  :: subname='(cice_cap:InitializeP1)'
+    character(len=*),parameter  :: subname='(cice_cap:InitializeAdvertise)'
 
     rc = ESMF_SUCCESS
 
@@ -170,7 +201,7 @@ module cice_cap_mod
   
   !-----------------------------------------------------------------------------
 
-  subroutine InitializeP2(gcomp, importState, exportState, clock, rc)
+  subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState, exportState
     type(ESMF_Clock)     :: clock
@@ -202,7 +233,7 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: coordYcorner(:,:)
     integer(ESMF_KIND_I4), pointer :: gridmask(:,:)
     real(ESMF_KIND_R8), pointer :: gridarea(:,:)
-    character(len=*),parameter  :: subname='(cice_cap:InitializeP2)'
+    character(len=*),parameter  :: subname='(cice_cap:InitializeRealize)'
 
     rc = ESMF_SUCCESS
 
@@ -944,15 +975,14 @@ module cice_cap_mod
 
   end subroutine 
 
-  subroutine cice_model_finalize(gcomp, importState, exportState, clock, rc)
+  subroutine cice_model_finalize(gcomp, rc)
 
     ! input arguments
     type(ESMF_GridComp)  :: gcomp
-    type(ESMF_State)     :: importState, exportState
-    type(ESMF_Clock)     :: clock
     integer, intent(out) :: rc
     
     ! local variables
+    type(ESMF_Clock)     :: clock
     type(ESMF_Time)                        :: currTime
     character(len=*),parameter  :: subname='(cice_cap:cice_model_finalize)'
 
@@ -960,6 +990,12 @@ module cice_cap_mod
 
     write(info,*) subname,' --- finalize called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
+
+    call NUOPC_ModelGet(gcomp, modelClock=clock, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
 
     call ESMF_ClockGet(clock, currTime=currTime, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
