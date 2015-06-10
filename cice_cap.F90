@@ -723,15 +723,15 @@ module cice_cap_mod
       endif
     enddo
 
-    call State_getFldPtr(importState,'inst_temp_height2m',dataPtr_ith2m,rc=rc)
+    call State_getFldPtr(importState,'inst_temp_height_lowest',dataPtr_ith2m,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_spec_humid_height2m',dataPtr_ishh2m,rc=rc)
+    call State_getFldPtr(importState,'inst_spec_humid_height_lowest',dataPtr_ishh2m,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_zonal_wind_height10m',dataPtr_izwh10m,rc=rc)
+    call State_getFldPtr(importState,'inst_zonal_wind_height_lowest',dataPtr_izwh10m,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_merid_wind_height10m',dataPtr_imwh10m,rc=rc)
+    call State_getFldPtr(importState,'inst_merid_wind_height_lowest',dataPtr_imwh10m,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_pres_height_surface',dataPtr_ips,rc=rc)
+    call State_getFldPtr(importState,'inst_pres_height_lowest',dataPtr_ips,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'mean_down_lw_flx',dataPtr_mdlwfx,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
@@ -1307,11 +1307,11 @@ module cice_cap_mod
 
 ! tcraig, don't point directly into cice data YET (last field is optional in interface)
 ! instead, create space for the field when it's "realized".
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m"       , "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m" , "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height10m", "will provide")
-    call fld_list_add(fldsToIce_num, fldsToIce, "inst_pres_height_surface" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height_lowest"       , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height_lowest" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height_lowest" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height_lowest" , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "inst_pres_height_lowest"       , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_lw_flx"         , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dir_flx" , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_down_sw_vis_dif_flx" , "will provide")
