@@ -1570,11 +1570,13 @@ module cice_cap_mod
     integer, intent(in)      :: slice
     character(len=*)         :: stdname
     character(len=*)         :: nop
-    real(ESMF_KIND_R8), dimension(:,:,:), optional, target :: farray
+    real(ESMF_KIND_R8), dimension(:,:,:), target :: farray
 
     type(ESMF_Field)         :: field
     real(ESMF_KIND_R8), dimension(:,:), pointer  :: f2d
     integer                  :: rc
+
+    return ! remove this line to debug field connection
 
     field = ESMF_FieldCreate(grid, ESMF_TYPEKIND_R8, &
       indexflag=ESMF_INDEX_DELOCAL, &
