@@ -585,6 +585,7 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_mzmf(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_mmmf(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_atmheight(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_rhoa(:,:,:)
     ! exports
     real(ESMF_KIND_R8), pointer :: dataPtr_mask(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_ifrac(:,:,:)
@@ -775,6 +776,8 @@ module cice_cap_mod
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'inst_height_lowest',dataPtr_atmheight,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(importState,'air_density_height_lowest',dataPtr_rhoa,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
 
     do iblk = 1,nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
@@ -786,7 +789,8 @@ module cice_cap_mod
        do i = ilo,ihi
           i1 = i - ilo + 1
           j1 = j - jlo + 1
-! air density?  current surface flux scheme has constant air density, this could be changed
+          !rhoa   (i,j,iblk) = dataPtr_ips(i1,j1,iblk)/(287.058*(1+0.608*dataPtr_ishh2m (i1,j1,iblk))*dataPtr_ith2m  (i1,j1,iblk))
+          rhoa   (i,j,iblk) = dataPtr_rhoa   (i1,j1,iblk)  ! import directly from mediator  
           potT   (i,j,iblk) = dataPtr_ith2m  (i1,j1,iblk) * (100000./dataPtr_ips(i1,j1,iblk))**0.286 ! Potential temperature (K)
           Tair   (i,j,iblk) = dataPtr_ith2m  (i1,j1,iblk) - 273.15  ! near surface temp, maybe lowest level (C)
           Qa     (i,j,iblk) = dataPtr_ishh2m (i1,j1,iblk)  ! near surface humidity, maybe lowest level (kg/kg)
@@ -1428,6 +1432,7 @@ module cice_cap_mod
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_surface_height"  , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_temp_height2m"  , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "inst_spec_humid_height2m"  , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "air_density_height_lowest"  , "will provide")
 
 !   call fld_list_add(fldsToIce_num, fldsToIce, "inst_zonal_wind_height10m", "will provide", strax)
 !   call fld_list_add(fldsToIce_num, fldsToIce, "inst_merid_wind_height10m", "will provide", stray)
