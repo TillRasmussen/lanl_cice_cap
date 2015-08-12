@@ -599,6 +599,10 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_strocnxT(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_strocnyT(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_fswthru(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthruvdr(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthruvdf(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthruidr(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fswthruidf(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_flwout(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_fsens(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_flat(:,:,:)
@@ -862,6 +866,14 @@ module cice_cap_mod
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'mean_sw_pen_to_ocn',dataPtr_fswthru,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'mean_net_sw_vis_dir_flx',dataPtr_fswthruvdr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'mean_net_sw_vis_dif_flx',dataPtr_fswthruvdf,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'mean_net_sw_ir_dir_flx',dataPtr_fswthruidr,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'mean_net_sw_ir_dif_flx',dataPtr_fswthruidf,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'mean_up_lw_flx_ice',dataPtr_flwout,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'mean_sensi_heat_flx_atm_into_ice',dataPtr_fsens,rc=rc)
@@ -898,6 +910,10 @@ module cice_cap_mod
           dataPtr_alvdf   (i1,j1,iblk) = alvdf(i,j,iblk)  ! albedo vis dif
           dataPtr_alidf   (i1,j1,iblk) = alidf(i,j,iblk)  ! albedo nir dif
           dataPtr_fswthru (i1,j1,iblk) = fswthru(i,j,iblk) ! flux of shortwave through ice to ocean
+          dataPtr_fswthruvdr (i1,j1,iblk) = fswthruvdr(i,j,iblk) ! flux of vis dir shortwave through ice to ocean
+          dataPtr_fswthruvdf (i1,j1,iblk) = fswthruvdf(i,j,iblk) ! flux of vis dif shortwave through ice to ocean
+          dataPtr_fswthruidr (i1,j1,iblk) = fswthruidr(i,j,iblk) ! flux of ir dir shortwave through ice to ocean
+          dataPtr_fswthruidf (i1,j1,iblk) = fswthruidf(i,j,iblk) ! flux of ir dif shortwave through ice to ocean
 ! could change this to be total gridcell fluxes including the ocean, this would imply atm-ocean
 !   fluxes are computed here.  requires some minor changes in cice to do that.
 !   turn on slab ocean coupling.
@@ -1036,6 +1052,10 @@ module cice_cap_mod
    call dumpCICEInternal(ice_grid_i, export_slice, "stress_on_ocn_ice_zonal"         , "will provide", strocnxT)
    call dumpCICEInternal(ice_grid_i, export_slice, "stress_on_ocn_ice_merid"         , "will provide", strocnyT)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_sw_pen_to_ocn"              , "will provide", fswthru)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_vis_dir_flx"        , "will provide", fswthru)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_vis_dif_flx"        , "will provide", fswthru)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_ir_dir_flx"         , "will provide", fswthru)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_ir_dif_flx"         , "will provide", fswthru)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_up_lw_flx_ice"              , "will provide", flwout)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_sensi_heat_flx_atm_into_ice", "will provide", fsens)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_laten_heat_flx_atm_into_ice", "will provide", flat)
@@ -1491,6 +1511,10 @@ module cice_cap_mod
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal"         , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid"         , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocn"              , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dir_flx"        , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dif_flx"        , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_ir_dir_flx"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_ir_dif_flx"         , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_up_lw_flx_ice"              , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sensi_heat_flx_atm_into_ice", "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_laten_heat_flx_atm_into_ice", "will provide")
