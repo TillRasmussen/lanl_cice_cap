@@ -15,8 +15,10 @@ module cice_cap_mod
   use ice_domain, only: nblocks, blocks_ice, distrb_info
   use ice_distribution, only: ice_distributiongetblockloc
   use ice_constants, only: Tffresh, rad_to_deg
+  use ice_calendar,  only: dt
   use ice_flux
-  use ice_grid, only: TLAT, TLON, ULAT, ULON, hm, tarea, ANGLET, ANGLE
+  use ice_grid, only: TLAT, TLON, ULAT, ULON, hm, tarea, ANGLET, ANGLE, &
+                      dxt, dyt
   use ice_state
   use CICE_RunMod
   use CICE_InitMod
@@ -560,6 +562,7 @@ module cice_cap_mod
     integer                                :: i,j,iblk,n,i1,i2,j1,j2
     integer                                :: ilo,ihi,jlo,jhi
     real(ESMF_KIND_R8)                     :: ue, vn, ui, vj
+    real(ESMF_KIND_R8)                     :: sigma_r, sigma_l, sigma_c
     type(ESMF_StateItem_Flag)              :: itemType
     ! imports
     real(ESMF_KIND_R8), pointer :: dataPtr_ith2m(:,:,:)
@@ -576,6 +579,7 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_fprec(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_sst(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_sss(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_sl(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_sssz(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_sssm(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_ocncz(:,:,:)
@@ -762,6 +766,8 @@ module cice_cap_mod
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'s_surf',dataPtr_sss,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(importState,'sea_lev',dataPtr_sl,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'sea_surface_slope_zonal',dataPtr_sssz,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'sea_surface_slope_merid',dataPtr_sssm,rc=rc)
@@ -806,19 +812,21 @@ module cice_cap_mod
           swidf  (i,j,iblk) = dataPtr_swif   (i1,j1,iblk)  ! downwelling shortwave flux, nir dif
           frain  (i,j,iblk) = dataPtr_lprec  (i1,j1,iblk)  ! flux of rain (liquid only)
 !          fsnow??(i,j,iblk) = dataPtr_fprec  (i1,j1,iblk)  ! flux of frozen precip ! fprec is all junk values from med, no src
-          sst    (i,j,iblk) = dataPtr_sst    (i1,j1,iblk) - 273.15  ! sea surface temp (may not be needed?)
 !          sss    (i,j,iblk) = dataPtr_sss    (i1,j1,iblk)  ! sea surface salinity (maybe for mushy layer)
-!          frzmlt (i,j,iblk) = dataPtr_fmpot  (i1,j1,iblk)  ! availability of ocean heat content (or freezing potential, use all if freezing) ! can potentially connect but contains junk from med, no src
+! availability of ocean heat content (or freezing potential, use all if freezing) ! can potentially connect but contains junk from med, no src
+          sst    (i,j,iblk) = dataPtr_sst    (i1,j1,iblk) - 273.15  ! sea surface temp (may not be needed?)
+!!    Ice%bheat : bottom heat conducted up from ocean due to temperaure difference between sst and melting ice
+!!    real    :: kmelt          = 6e-5*4e6   ! ocean/ice heat flux constant
+!!    real, public, parameter :: TFREEZE = 273.16 
+!!    real, parameter :: MU_TS = 0.054     ! relates freezing temp. to salinity
+          frzmlt (i,j,iblk) = -6e-5*4e6*(sst (i,j,iblk) + 0.054*dataPtr_sss(i1,j1,iblk))
+          if(dataPtr_fmpot  (i1,j1,iblk) .gt. 0) frzmlt (i,j,iblk) = dataPtr_fmpot  (i1,j1,iblk)/dt  
 !          hmix   (i,j,iblk) = dataPtr_mld    (i1,j1,iblk)  ! ocean mixed layer depth (may not be needed?)
 !          ! --- rotate these vectors from east/north to i/j ---
           ue = dataPtr_mzmf(i1,j1,iblk)
           vn = dataPtr_mmmf(i1,j1,iblk)
           strax  (i,j,iblk) = -(ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk)))  ! lowest level wind stress or momentum flux (Pa)
           stray  (i,j,iblk) = -(ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk)))  ! lowest level wind stress or momentum flux (Pa)
-!          ue = dataPtr_sssz   (i1,j1,iblk)
-!          vn = dataPtr_sssm   (i1,j1,iblk)
-!          ss_tltx(i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! sea surface height gradient (small effect) ! Junk as of now, no src comp
-!          ss_tlty(i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))  ! sea surface height gradient (small effect)
           ue = dataPtr_ocncz  (i1,j1,iblk)
           vn = dataPtr_ocncm  (i1,j1,iblk)
           uocn   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! ocean current
@@ -828,8 +836,31 @@ module cice_cap_mod
           uatm   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! wind u component
           vatm   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))  ! wind v component
           wind   (i,j,iblk) = sqrt(dataPtr_izwh10m  (i1,j1,iblk)**2 + dataPtr_imwh10m  (i1,j1,iblk)**2)     ! wind speed
-!!          write(tmpstr,'(a,3i6,2x,g17.7)') subname//' sst = ',i,j,iblk,dataPtr_sst(i,j,iblk)
-!!          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
+
+          ! zonal sea surface slope
+          sigma_r = 0.5*(dataPtr_sl(i1+1,j1+1,iblk)-dataPtr_sl(i1,j1+1,iblk)+ dataPtr_sl(i1+1,j1,iblk)-dataPtr_sl(i1,j1,iblk))/dxt(i,j,iblk)
+          sigma_l = 0.5*(dataPtr_sl(i1,j1+1,iblk)-dataPtr_sl(i1-1,j1+1,iblk)+ dataPtr_sl(i1,j1,iblk)-dataPtr_sl(i1-1,j1,iblk))/dxt(i,j,iblk)
+          sigma_c = 0.5*(sigma_r+sigma_l)
+          if ( (sigma_r * sigma_l) .GT. 0.0 ) then
+            ss_tltx(i,j,iblk) = sign ( min( 2.*min(abs(sigma_l),abs(sigma_r)), abs(sigma_c) ), sigma_c )
+          else
+            ss_tltx(i,j,iblk) = 0.0
+          endif
+          ! meridional sea surface slope
+          sigma_r = 0.5*(dataPtr_sl(i1+1,j1+1,iblk)-dataPtr_sl(i1+1,j1,iblk)+ dataPtr_sl(i1,j1+1,iblk)-dataPtr_sl(i1,j1,iblk))/dyt(i,j,iblk)
+          sigma_l = 0.5*(dataPtr_sl(i1+1,j1,iblk)-dataPtr_sl(i1+1,j1-1,iblk)+ dataPtr_sl(i1,j1,iblk)-dataPtr_sl(i1,j1-1,iblk))/dyt(i,j,iblk)
+          sigma_c = 0.5*(sigma_r+sigma_l)
+          if ( (sigma_r * sigma_l) .GT. 0.0 ) then
+            ss_tlty(i,j,iblk) = sign ( min( 2.*min(abs(sigma_l),abs(sigma_r)), abs(sigma_c) ), sigma_c )
+          else
+            ss_tlty(i,j,iblk) = 0.0
+          endif
+          ! rotate onto local basis vectors
+          ue = ss_tltx   (i,j,iblk)
+          vn = ss_tlty   (i,j,iblk)
+          ss_tltx(i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))
+          ss_tlty(i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))
+
        enddo
        enddo
     enddo
@@ -1033,6 +1064,8 @@ module cice_cap_mod
    call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_slope_zonal", "will provide", ss_tltx)
    call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_slope_merid", "will provide", ss_tlty)
    call dumpCICEInternal(ice_grid_i, import_slice, "s_surf", "will provide", sss)
+   call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_slope_zonal", "will provide", ss_tltx)
+   call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_slope_merid", "will provide", ss_tlty)
    call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_temperature", "will provide", sst)
    call dumpCICEInternal(ice_grid_i, import_slice, "freezing_melting_potential", "will provide", frzmlt)
    call dumpCICEInternal(ice_grid_i, import_slice, "xx_inst_frz_mlt_potential", "will provide", frzmlt_init)
@@ -1441,6 +1474,7 @@ module cice_cap_mod
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_fprec_rate"          , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_temperature"  , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "s_surf"                   , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "sea_lev"                  , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_zonal"  , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_merid"  , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal"        , "will provide")
