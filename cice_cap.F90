@@ -588,8 +588,13 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_mld(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_mzmf(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_mmmf(:,:,:)
-    real(ESMF_KIND_R8), pointer :: dataPtr_atmheight(:,:,:)
-    real(ESMF_KIND_R8), pointer :: dataPtr_rhoa(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_rhoabot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_Tbot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_pbot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_qbot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_zlvlbot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_ubot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_vbot(:,:,:)
     ! exports
     real(ESMF_KIND_R8), pointer :: dataPtr_mask(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_ifrac(:,:,:)
@@ -740,13 +745,13 @@ module cice_cap_mod
 
     call State_getFldPtr(importState,'inst_temp_height_lowest',dataPtr_ith2m,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_spec_humid_height_lowest',dataPtr_ishh2m,rc=rc)
+    call State_getFldPtr(importState,'inst_spec_humid_height_lowest',dataPtr_qbot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_zonal_wind_height_lowest',dataPtr_izwh10m,rc=rc)
+    call State_getFldPtr(importState,'inst_zonal_wind_height_lowest',dataPtr_ubot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_merid_wind_height_lowest',dataPtr_imwh10m,rc=rc)
+    call State_getFldPtr(importState,'inst_merid_wind_height_lowest',dataPtr_vbot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_pres_height_lowest',dataPtr_ips,rc=rc)
+    call State_getFldPtr(importState,'inst_pres_height_lowest',dataPtr_pbot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'mean_down_lw_flx',dataPtr_mdlwfx,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
@@ -784,9 +789,9 @@ module cice_cap_mod
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'mean_merid_moment_flx',dataPtr_mmmf,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_height_lowest',dataPtr_atmheight,rc=rc)
+    call State_getFldPtr(importState,'inst_height_lowest',dataPtr_zlvlbot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'air_density_height_lowest',dataPtr_rhoa,rc=rc)
+    call State_getFldPtr(importState,'air_density_height_lowest',dataPtr_rhoabot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
 
     do iblk = 1,nblocks
@@ -800,11 +805,11 @@ module cice_cap_mod
           i1 = i - ilo + 1
           j1 = j - jlo + 1
           !rhoa   (i,j,iblk) = dataPtr_ips(i1,j1,iblk)/(287.058*(1+0.608*dataPtr_ishh2m (i1,j1,iblk))*dataPtr_ith2m  (i1,j1,iblk))
-          rhoa   (i,j,iblk) = dataPtr_rhoa   (i1,j1,iblk)  ! import directly from mediator  
-          potT   (i,j,iblk) = dataPtr_ith2m  (i1,j1,iblk) * (100000./dataPtr_ips(i1,j1,iblk))**0.286 ! Potential temperature (K)
-          Tair   (i,j,iblk) = dataPtr_ith2m  (i1,j1,iblk) - 273.15  ! near surface temp, maybe lowest level (C)
-          Qa     (i,j,iblk) = dataPtr_ishh2m (i1,j1,iblk)  ! near surface humidity, maybe lowest level (kg/kg)
-          zlvl   (i,j,iblk) = dataPtr_atmheight    (i1,j1,iblk)  ! height of the lowest level (m) 
+          rhoa   (i,j,iblk) = dataPtr_rhoabot(i1,j1,iblk)  ! import directly from mediator  
+          potT   (i,j,iblk) = dataPtr_Tbot   (i1,j1,iblk) * (100000./dataPtr_pbot(i1,j1,iblk))**0.286 ! Potential temperature (K)
+          Tair   (i,j,iblk) = dataPtr_Tbot   (i1,j1,iblk)  ! near surface temp, maybe lowest level (K)
+          Qa     (i,j,iblk) = dataPtr_qbot   (i1,j1,iblk)  ! near surface humidity, maybe lowest level (kg/kg)
+          zlvl   (i,j,iblk) = dataPtr_zlvlbot(i1,j1,iblk)  ! height of the lowest level (m) 
           flw    (i,j,iblk) = dataPtr_mdlwfx (i1,j1,iblk)  ! downwelling longwave flux
           swvdr  (i,j,iblk) = dataPtr_swvr   (i1,j1,iblk)  ! downwelling shortwave flux, vis dir
           swvdf  (i,j,iblk) = dataPtr_swvf   (i1,j1,iblk)  ! downwelling shortwave flux, vis dif
@@ -823,16 +828,16 @@ module cice_cap_mod
           if(dataPtr_fmpot  (i1,j1,iblk) .gt. 0) frzmlt (i,j,iblk) = dataPtr_fmpot  (i1,j1,iblk)/dt  
 !          hmix   (i,j,iblk) = dataPtr_mld    (i1,j1,iblk)  ! ocean mixed layer depth (may not be needed?)
 !          ! --- rotate these vectors from east/north to i/j ---
-          ue = dataPtr_mzmf(i1,j1,iblk)
-          vn = dataPtr_mmmf(i1,j1,iblk)
-          strax  (i,j,iblk) = -(ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk)))  ! lowest level wind stress or momentum flux (Pa)
-          stray  (i,j,iblk) = -(ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk)))  ! lowest level wind stress or momentum flux (Pa)
+          !ue = dataPtr_mzmf(i1,j1,iblk)
+          !vn = dataPtr_mmmf(i1,j1,iblk)
+          !strax  (i,j,iblk) = -(ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk)))  ! lowest level wind stress or momentum flux (Pa)
+          !stray  (i,j,iblk) = -(ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk)))  ! lowest level wind stress or momentum flux (Pa)
           ue = dataPtr_ocncz  (i1,j1,iblk)
           vn = dataPtr_ocncm  (i1,j1,iblk)
           uocn   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! ocean current
           vocn   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))  ! ocean current
-          ue = dataPtr_izwh10m  (i1,j1,iblk)
-          vn = dataPtr_imwh10m  (i1,j1,iblk)
+          ue = dataPtr_ubot  (i1,j1,iblk)
+          vn = dataPtr_vbot  (i1,j1,iblk)
           uatm   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! wind u component
           vatm   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))  ! wind v component
           wind   (i,j,iblk) = sqrt(dataPtr_izwh10m  (i1,j1,iblk)**2 + dataPtr_imwh10m  (i1,j1,iblk)**2)     ! wind speed
