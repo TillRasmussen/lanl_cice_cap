@@ -565,11 +565,6 @@ module cice_cap_mod
     real(ESMF_KIND_R8)                     :: sigma_r, sigma_l, sigma_c
     type(ESMF_StateItem_Flag)              :: itemType
     ! imports
-    real(ESMF_KIND_R8), pointer :: dataPtr_ith2m(:,:,:)
-    real(ESMF_KIND_R8), pointer :: dataPtr_ishh2m(:,:,:)
-    real(ESMF_KIND_R8), pointer :: dataPtr_izwh10m(:,:,:)
-    real(ESMF_KIND_R8), pointer :: dataPtr_imwh10m(:,:,:)
-    real(ESMF_KIND_R8), pointer :: dataPtr_ips(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_mdlwfx(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_swvr(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_swvf(:,:,:)
@@ -592,7 +587,7 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_Tbot(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_pbot(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_qbot(:,:,:)
-    real(ESMF_KIND_R8), pointer :: dataPtr_zlvlbot(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_zlvl(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_ubot(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_vbot(:,:,:)
     ! exports
@@ -743,7 +738,7 @@ module cice_cap_mod
       endif
     enddo
 
-    call State_getFldPtr(importState,'inst_temp_height_lowest',dataPtr_ith2m,rc=rc)
+    call State_getFldPtr(importState,'inst_temp_height_lowest',dataPtr_Tbot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'inst_spec_humid_height_lowest',dataPtr_qbot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
@@ -789,7 +784,7 @@ module cice_cap_mod
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'mean_merid_moment_flx',dataPtr_mmmf,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
-    call State_getFldPtr(importState,'inst_height_lowest',dataPtr_zlvlbot,rc=rc)
+    call State_getFldPtr(importState,'inst_height_lowest',dataPtr_zlvl,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'air_density_height_lowest',dataPtr_rhoabot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
@@ -809,7 +804,7 @@ module cice_cap_mod
           potT   (i,j,iblk) = dataPtr_Tbot   (i1,j1,iblk) * (100000./dataPtr_pbot(i1,j1,iblk))**0.286 ! Potential temperature (K)
           Tair   (i,j,iblk) = dataPtr_Tbot   (i1,j1,iblk)  ! near surface temp, maybe lowest level (K)
           Qa     (i,j,iblk) = dataPtr_qbot   (i1,j1,iblk)  ! near surface humidity, maybe lowest level (kg/kg)
-          zlvl   (i,j,iblk) = dataPtr_zlvlbot(i1,j1,iblk)  ! height of the lowest level (m) 
+          zlvl   (i,j,iblk) = dataPtr_zlvl   (i1,j1,iblk)  ! height of the lowest level (m) 
           flw    (i,j,iblk) = dataPtr_mdlwfx (i1,j1,iblk)  ! downwelling longwave flux
           swvdr  (i,j,iblk) = dataPtr_swvr   (i1,j1,iblk)  ! downwelling shortwave flux, vis dir
           swvdf  (i,j,iblk) = dataPtr_swvf   (i1,j1,iblk)  ! downwelling shortwave flux, vis dif
@@ -840,7 +835,7 @@ module cice_cap_mod
           vn = dataPtr_vbot  (i1,j1,iblk)
           uatm   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! wind u component
           vatm   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk))  ! wind v component
-          wind   (i,j,iblk) = sqrt(dataPtr_izwh10m  (i1,j1,iblk)**2 + dataPtr_imwh10m  (i1,j1,iblk)**2)     ! wind speed
+          wind   (i,j,iblk) = sqrt(dataPtr_ubot  (i1,j1,iblk)**2 + dataPtr_vbot  (i1,j1,iblk)**2)     ! wind speed
 
           ! zonal sea surface slope
           sigma_r = 0.5*(dataPtr_sl(i1+1,j1+1,iblk)-dataPtr_sl(i1,j1+1,iblk)+ dataPtr_sl(i1+1,j1,iblk)-dataPtr_sl(i1,j1,iblk))/dxt(i,j,iblk)
