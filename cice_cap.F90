@@ -819,7 +819,7 @@ module cice_cap_mod
 !!    real    :: kmelt          = 6e-5*4e6   ! ocean/ice heat flux constant
 !!    real, public, parameter :: TFREEZE = 273.16 
 !!    real, parameter :: MU_TS = 0.054     ! relates freezing temp. to salinity
-          frzmlt (i,j,iblk) = -6e-5*4e6*(sst (i,j,iblk) + 0.054*dataPtr_sss(i1,j1,iblk))
+          frzmlt (i,j,iblk) = -6e-5*4e6*(sst (i,j,iblk)-273.15 + 0.054*dataPtr_sss(i1,j1,iblk))
           if(dataPtr_fmpot  (i1,j1,iblk) .gt. 0) frzmlt (i,j,iblk) = dataPtr_fmpot  (i1,j1,iblk)/dt  
 !          hmix   (i,j,iblk) = dataPtr_mld    (i1,j1,iblk)  ! ocean mixed layer depth (may not be needed?)
 !          ! --- rotate these vectors from east/north to i/j ---
