@@ -515,7 +515,8 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
 
-    call ESMF_TimeIntervalSet(timestep, m=60, rc=rc)
+    ! tcraig: dt is the cice thermodynamic timestep in seconds
+    call ESMF_TimeIntervalSet(timestep, s=nint(dt), rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
@@ -529,7 +530,7 @@ module cice_cap_mod
       
     ! initialize internal clock
     ! here: parent Clock and stability timeStep determine actual model timeStep
-    call ESMF_TimeIntervalSet(stabilityTimeStep, m=60, rc=rc) 
+    call ESMF_TimeIntervalSet(stabilityTimeStep, s=nint(dt), rc=rc) 
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
@@ -658,14 +659,16 @@ module cice_cap_mod
 
     import_slice = import_slice + 1
 
-! causes core dumps and garbage
-!    call NUOPC_StateWrite(importState, filePrefix='fieldNS_ice_import_', &
-!      timeslice=import_slice, relaxedFlag=.true., rc=rc) 
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!      line=__LINE__, &
-!      file=__FILE__)) &
-!      return  ! bail out
+#if (1 == 0)
+!tcx causes core dumps and garbage
+    call NUOPC_StateWrite(importState, filePrefix='field_ice_import_', &
+      timeslice=import_slice, relaxedFlag=.true., rc=rc) 
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
 
+#else
     do i = 1,fldsToice_num
       fldname = fldsToice(i)%shortname
       call ESMF_StateGet(importState, itemName=trim(fldname), itemType=itemType, rc=rc)
@@ -737,6 +740,7 @@ module cice_cap_mod
           return  ! bail out
       endif
     enddo
+#endif
 
     call State_getFldPtr(importState,'inst_temp_height_lowest',dataPtr_Tbot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
@@ -800,11 +804,13 @@ module cice_cap_mod
           i1 = i - ilo + 1
           j1 = j - jlo + 1
           !rhoa   (i,j,iblk) = dataPtr_ips(i1,j1,iblk)/(287.058*(1+0.608*dataPtr_ishh2m (i1,j1,iblk))*dataPtr_ith2m  (i1,j1,iblk))
+#if (1 == 1)
           rhoa   (i,j,iblk) = dataPtr_rhoabot(i1,j1,iblk)  ! import directly from mediator  
           potT   (i,j,iblk) = dataPtr_Tbot   (i1,j1,iblk) * (100000./dataPtr_pbot(i1,j1,iblk))**0.286 ! Potential temperature (K)
           Tair   (i,j,iblk) = dataPtr_Tbot   (i1,j1,iblk)  ! near surface temp, maybe lowest level (K)
           Qa     (i,j,iblk) = dataPtr_qbot   (i1,j1,iblk)  ! near surface humidity, maybe lowest level (kg/kg)
           zlvl   (i,j,iblk) = dataPtr_zlvl   (i1,j1,iblk)  ! height of the lowest level (m) 
+#endif
           flw    (i,j,iblk) = dataPtr_mdlwfx (i1,j1,iblk)  ! downwelling longwave flux
           swvdr  (i,j,iblk) = dataPtr_swvr   (i1,j1,iblk)  ! downwelling shortwave flux, vis dir
           swvdf  (i,j,iblk) = dataPtr_swvf   (i1,j1,iblk)  ! downwelling shortwave flux, vis dif
@@ -814,6 +820,7 @@ module cice_cap_mod
 !          fsnow??(i,j,iblk) = dataPtr_fprec  (i1,j1,iblk)  ! flux of frozen precip ! fprec is all junk values from med, no src
 !          sss    (i,j,iblk) = dataPtr_sss    (i1,j1,iblk)  ! sea surface salinity (maybe for mushy layer)
 ! availability of ocean heat content (or freezing potential, use all if freezing) ! can potentially connect but contains junk from med, no src
+#if (1 == 1)
           sst    (i,j,iblk) = dataPtr_sst    (i1,j1,iblk) - 273.15  ! sea surface temp (may not be needed?)
 !!    Ice%bheat : bottom heat conducted up from ocean due to temperaure difference between sst and melting ice
 !!    real    :: kmelt          = 6e-5*4e6   ! ocean/ice heat flux constant
@@ -821,6 +828,7 @@ module cice_cap_mod
 !!    real, parameter :: MU_TS = 0.054     ! relates freezing temp. to salinity
           frzmlt (i,j,iblk) = -6e-5*4e6*(sst (i,j,iblk)-273.15 + 0.054*dataPtr_sss(i1,j1,iblk))
           if(dataPtr_fmpot  (i1,j1,iblk) .gt. 0) frzmlt (i,j,iblk) = dataPtr_fmpot  (i1,j1,iblk)/dt  
+#endif
 !          hmix   (i,j,iblk) = dataPtr_mld    (i1,j1,iblk)  ! ocean mixed layer depth (may not be needed?)
 !          ! --- rotate these vectors from east/north to i/j ---
           !ue = dataPtr_mzmf(i1,j1,iblk)
@@ -980,14 +988,16 @@ module cice_cap_mod
 
     export_slice = export_slice + 1
 
-! causes core dumps and garbage
-!    call NUOPC_StateWrite(exportState, filePrefix='field_ice_export_', &
-!      timeslice=export_slice, relaxedFlag=.true., rc=rc) 
-!    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!      line=__LINE__, &
-!      file=__FILE__)) &
-!      return  ! bail out
+#if (1 == 0)
+!tcx causes core dumps and garbage
+    call NUOPC_StateWrite(exportState, filePrefix='field_ice_export_', &
+      timeslice=export_slice, relaxedFlag=.true., rc=rc) 
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
 
+#else
     do i = 1,fldsFrIce_num
       fldname = fldsFrIce(i)%shortname
       call ESMF_StateGet(exportState, itemName=trim(fldname), itemType=itemType, rc=rc)
@@ -1038,6 +1048,7 @@ module cice_cap_mod
           return  ! bail out
       endif
     enddo
+#endif
 
     write(info,*) subname,' --- run phase 4 called --- ',rc
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
