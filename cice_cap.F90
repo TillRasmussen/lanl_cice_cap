@@ -635,8 +635,8 @@ module cice_cap_mod
     ! will come in by one internal timeStep advanced. This goes until the
     ! stopTime of the internal Clock has been reached.
     
-    call NUOPC_ClockPrintCurrTime(clock, &
-      "------>Advancing CICE from: ", rc=rc)
+    call ESMF_ClockPrint(clock, options="currTime", &
+      preString="------>Advancing CICE from: ", rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
@@ -648,8 +648,8 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
     
-    call NUOPC_TimePrint(currTime + timeStep, &
-      "--------------------------------> to: ", rc=rc)
+    call ESMF_TimePrint(currTime + timeStep, &
+      preString="--------------------------------> to: ", rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
@@ -733,7 +733,7 @@ module cice_cap_mod
           file=__FILE__)) &
           return  ! bail out
 
-        call ESMF_FieldDestroy(lfield2d, rc=rc)
+        call ESMF_FieldDestroy(lfield2d, noGarbage=.true., rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__)) &
@@ -1040,7 +1040,7 @@ module cice_cap_mod
           file=__FILE__)) &
           return  ! bail out
 
-        call ESMF_FieldDestroy(lfield2d, rc=rc)
+        call ESMF_FieldDestroy(lfield2d, noGarbage=.true., rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__)) &
@@ -1186,7 +1186,7 @@ module cice_cap_mod
         file=__FILE__)) &
         return  ! bail out
 
-      call NUOPC_StateAdvertiseField(state, &
+      call NUOPC_Advertise(state, &
         standardName=field_defs(i)%stdname, &
         name=field_defs(i)%shortname, &
         rc=rc)
@@ -1263,8 +1263,8 @@ module cice_cap_mod
           return  ! bail out
       endif
 
-      if (NUOPC_StateIsFieldConnected(state, fieldName=field_defs(i)%shortname)) then
-        call NUOPC_StateRealizeField(state, field=field, rc=rc)
+      if (NUOPC_IsConnected(state, fieldName=field_defs(i)%shortname)) then
+        call NUOPC_Realize(state, field=field, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__)) &
@@ -1674,7 +1674,7 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
 
-    call ESMF_FieldDestroy(field, rc=rc)
+    call ESMF_FieldDestroy(field, noGarbage=.true., rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
