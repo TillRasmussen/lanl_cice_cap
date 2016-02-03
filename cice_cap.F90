@@ -698,7 +698,7 @@ module cice_cap_mod
         fldptr2d(:,:) = fldptr(:,:,1)
 
 ! causes core dumps and garbage
-!        call NUOPC_FieldWrite(lfield, file='fieldN3d_ice_import_'//trim(fldname)//'.nc', &
+!        call NUOPC_Write(lfield, fileName='fieldN3d_ice_import_'//trim(fldname)//'.nc', &
 !          timeslice=import_slice, relaxedFlag=.true., rc=rc) 
 !        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
 !          line=__LINE__, &
@@ -706,7 +706,7 @@ module cice_cap_mod
 !          return  ! bail out
 
 ! causes run time error in usage
-!        call NUOPC_FieldWrite(lfield2d, file='fieldN_ice_import_'//trim(fldname)//'.nc', &
+!        call NUOPC_Write(lfield2d, fileName='fieldN_ice_import_'//trim(fldname)//'.nc', &
 !          timeslice=import_slice, relaxedFlag=.true., rc=rc) 
 !        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
 !          line=__LINE__, &
@@ -719,14 +719,14 @@ module cice_cap_mod
 !          line=__LINE__, &
 !          file=__FILE__)) &
 !          return  ! bail out
-!        call ESMF_FieldWrite(lfield, file='field3d_ice_import_'//trim(fldname)//'.nc', &
+!        call ESMF_FieldWrite(lfield, fileName='field3d_ice_import_'//trim(fldname)//'.nc', &
 !          timeslice=import_slice, rc=rc) 
 !        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
 !          line=__LINE__, &
 !          file=__FILE__)) &
 !          return  ! bail out
 
-        call ESMF_FieldWrite(lfield2d, file='field_ice_import_'//trim(fldname)//'.nc', &
+        call ESMF_FieldWrite(lfield2d, fileName='field_ice_import_'//trim(fldname)//'.nc', &
           timeslice=import_slice, rc=rc) 
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
@@ -1026,14 +1026,14 @@ module cice_cap_mod
         fldptr2d(:,:) = fldptr(:,:,1)
 
 ! causes core dumps and garbage
-!        call NUOPC_FieldWrite(lfield, file='field_ice_export_'//trim(fldname)//'.nc', &
+!        call NUOPC_Write(lfield, fileName='field_ice_export_'//trim(fldname)//'.nc', &
 !          timeslice=export_slice, relaxedFlag=.true., rc=rc) 
 !        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
 !          line=__LINE__, &
 !          file=__FILE__)) &
 !          return  ! bail out
 
-        call ESMF_FieldWrite(lfield2d, file='field_ice_export_'//trim(fldname)//'.nc', &
+        call ESMF_FieldWrite(lfield2d, fileName='field_ice_export_'//trim(fldname)//'.nc', &
           timeslice=export_slice, rc=rc) 
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
@@ -1667,7 +1667,7 @@ module cice_cap_mod
 
     f2d(:,:) = farray(:,:,1)
 
-    call ESMF_FieldWrite(field, file='field_ice_internal_'//trim(stdname)//'.nc', &
+    call ESMF_FieldWrite(field, fileName='field_ice_internal_'//trim(stdname)//'.nc', &
       timeslice=slice, rc=rc) 
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
