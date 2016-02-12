@@ -67,6 +67,7 @@ module cice_cap_mod
   integer :: dbrc     ! temporary debug rc value
 
   type(ESMF_Grid), save :: ice_grid_i
+  logical :: write_diagnostics = .false.
 
   contains
   !-----------------------------------------------------------------------
@@ -617,8 +618,10 @@ module cice_cap_mod
     character(len=*),parameter  :: subname='(cice_cap:ModelAdvance_slow)'
 
     rc = ESMF_SUCCESS
+    call ESMF_VMLogMemInfo("Entering CICE Model_ADVANCE: ")
     write(info,*) subname,' --- run phase 1 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
+
     
     ! query the Component for its clock, importState and exportState
     call ESMF_GridCompGet(gcomp, clock=clock, importState=importState, &
@@ -659,6 +662,7 @@ module cice_cap_mod
 
     call state_diagnose(importState, 'cice_import', rc)
 
+  if(write_diagnostics) then
     import_slice = import_slice + 1
 
 #if (1 == 0)
@@ -743,6 +747,7 @@ module cice_cap_mod
       endif
     enddo
 #endif
+  endif  ! write_diagnostics
 
     call State_getFldPtr(importState,'inst_temp_height_lowest',dataPtr_Tbot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
@@ -876,7 +881,9 @@ module cice_cap_mod
 
     write(info,*) subname,' --- run phase 2 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
+    call ESMF_VMLogMemInfo("Before CICE_Run")
     call CICE_Run
+    call ESMF_VMLogMemInfo("Afterr CICE_Run")
     write(info,*) subname,' --- run phase 3 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
 
@@ -987,6 +994,7 @@ module cice_cap_mod
 
     call state_diagnose(exportState, 'cice_export', rc)
 
+  if(write_diagnostics) then
     export_slice = export_slice + 1
 
 #if (1 == 0)
@@ -1050,6 +1058,7 @@ module cice_cap_mod
       endif
     enddo
 #endif
+  endif  ! write_diagnostics
 
     write(info,*) subname,' --- run phase 4 called --- ',rc
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
@@ -1131,6 +1140,7 @@ module cice_cap_mod
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_albedo_nir_dif", "will provide", alidf_ocn)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_2m_atm_ref_temperature", "will provide", Tref_ocn)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_2m_atm_ref_spec_humidity", "will provide", Qref_ocn)
+   call ESMF_VMLogMemInfo("Leaving CICE Model_ADVANCE: ")
   end subroutine 
 
   subroutine cice_model_finalize(gcomp, rc)
