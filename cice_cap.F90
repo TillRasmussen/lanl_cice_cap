@@ -624,6 +624,11 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_fsens(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_flat(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_evap(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fhocn(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fresh(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_fsalt(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_vice(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_vsno(:,:,:)
     character(len=*),parameter  :: subname='(cice_cap:ModelAdvance_slow)'
 
     rc = ESMF_SUCCESS
@@ -832,8 +837,8 @@ module cice_cap_mod
           swidf  (i,j,iblk) = dataPtr_swif   (i1,j1,iblk)  ! downwelling shortwave flux, nir dif
           fsw(i,j,iblk) = swvdr(i,j,iblk)+swvdf(i,j,iblk)+swidr(i,j,iblk)+swidf(i,j,iblk)
           frain  (i,j,iblk) = dataPtr_lprec  (i1,j1,iblk)  ! flux of rain (liquid only)
-!          fsnow??(i,j,iblk) = dataPtr_fprec  (i1,j1,iblk)  ! flux of frozen precip ! fprec is all junk values from med, no src
-!          sss    (i,j,iblk) = dataPtr_sss    (i1,j1,iblk)  ! sea surface salinity (maybe for mushy layer)
+          fsnow  (i,j,iblk) = dataPtr_fprec  (i1,j1,iblk)  ! flux of frozen precip ! fprec is all junk values from med, no src
+          sss    (i,j,iblk) = dataPtr_sss    (i1,j1,iblk)  ! sea surface salinity (maybe for mushy layer)
 ! availability of ocean heat content (or freezing potential, use all if freezing) ! can potentially connect but contains junk from med, no src
           sst    (i,j,iblk) = dataPtr_sst    (i1,j1,iblk) - 273.15  ! sea surface temp (may not be needed?)
 !!    Ice%bheat : bottom heat conducted up from ocean due to temperaure difference between sst and melting ice
@@ -920,6 +925,16 @@ module cice_cap_mod
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'stress_on_ocn_ice_merid',dataPtr_strocnyT,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'net_heat_flx_to_ocn',dataPtr_fhocn,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'mean_fresh_water_to_ocean_rate',dataPtr_fresh,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'mean_salt_rate',dataPtr_fsalt,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'mean_ice_volume',dataPtr_vice,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'mean_snow_volume',dataPtr_vsno,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'mean_sw_pen_to_ocn',dataPtr_fswthru,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'mean_net_sw_vis_dir_flx',dataPtr_fswthruvdr,rc=rc)
@@ -981,6 +996,11 @@ module cice_cap_mod
           dataPtr_fsens   (i1,j1,iblk) = fsens(i,j,iblk)  ! sensible
           dataPtr_flat    (i1,j1,iblk) = flat(i,j,iblk)   ! latent
           dataPtr_evap    (i1,j1,iblk) = evap(i,j,iblk)   ! evaporation (not ~latent, need separate field)
+          dataPtr_fhocn    (i1,j1,iblk) = fhocn(i,j,iblk)   ! heat exchange with ocean 
+          dataPtr_fresh    (i1,j1,iblk) = fresh(i,j,iblk)   ! fresh water to ocean
+          dataPtr_fsalt    (i1,j1,iblk) = fsalt(i,j,iblk)   ! salt to ocean
+          dataPtr_vice    (i1,j1,iblk) = vice(i,j,iblk)   ! sea ice volume
+          dataPtr_vsno    (i1,j1,iblk) = vsno(i,j,iblk)   ! snow volume
           ! --- rotate these vectors from i/j to east/north ---
           ui = strairxT(i,j,iblk)
           vj = strairyT(i,j,iblk)
@@ -1088,12 +1108,12 @@ module cice_cap_mod
    call dumpCICEInternal(ice_grid_i, import_slice, "mean_down_sw_ir_dif_flx", "will provide", swidf)
    call dumpCICEInternal(ice_grid_i, import_slice, "mean_down_lw_flx", "will provide", flw)
    call dumpCICEInternal(ice_grid_i, import_slice, "mean_prec_rate", "will provide", frain)
-   call dumpCICEInternal(ice_grid_i, import_slice, "xx_mean_fprec_rate", "will provide", frain)
+   call dumpCICEInternal(ice_grid_i, import_slice, "mean_fprec_rate", "will provide", fsnow)
    call dumpCICEInternal(ice_grid_i, import_slice, "ocn_current_zonal", "will provide", uocn)
    call dumpCICEInternal(ice_grid_i, import_slice, "ocn_current_merid", "will provide", vocn)
    call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_slope_zonal", "will provide", ss_tltx)
    call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_slope_merid", "will provide", ss_tlty)
-   call dumpCICEInternal(ice_grid_i, import_slice, "s_surf", "will provide", sss)
+   call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_salinity", "will provide", sss)
    call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_slope_zonal", "will provide", ss_tltx)
    call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_slope_merid", "will provide", ss_tlty)
    call dumpCICEInternal(ice_grid_i, import_slice, "sea_surface_temperature", "will provide", sst)
@@ -1123,6 +1143,11 @@ module cice_cap_mod
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_sensi_heat_flx_atm_into_ice", "will provide", fsens)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_laten_heat_flx_atm_into_ice", "will provide", flat)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_evap_rate_atm_into_ice"     , "will provide", evap)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_fresh_water_to_ocean_rate", "will provide", fresh)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_salt_rate", "will provide", fsalt)
+   call dumpCICEInternal(ice_grid_i, export_slice, "net_heat_flx_to_ocn", "will provide", fhocn)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_ice_volume", "will provide", vice)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_snow_volume", "will provide", vsno)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_inst_temp_height2m", "will provide", Tref)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_inst_spec_humid_height2m", "will provide", Qref)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_mean_albedo_vis_dir", "will provide", alvdr_ai)
@@ -1134,9 +1159,6 @@ module cice_cap_mod
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_melt_pond_albedo", "will provide", albpnd)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_apeff_ai", "will provide", apeff_ai)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_mean_fresh_water_flx_to_ponds", "will provide", fpond)
-   call dumpCICEInternal(ice_grid_i, export_slice, "xx_mean_fresh_water_to_ocean_rate", "will provide", fresh)
-   call dumpCICEInternal(ice_grid_i, export_slice, "xx_mean_salt_rate", "will provide", fsalt)
-   call dumpCICEInternal(ice_grid_i, export_slice, "xx_net_heat_flx_to_ocn", "will provide", fhocn)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_strairx_ocn", "will provide", strairx_ocn)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_strairy_ocn", "will provide", strairy_ocn)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_mean_sensi_heat_flx", "will provide", fsens_ocn)
@@ -1596,9 +1618,6 @@ module cice_cap_mod
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_melt_pond_albedo", "will provide", albpnd)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_apeff_ai", "will provide", apeff_ai)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_fresh_water_flx_to_ponds", "will provide", fpond)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_fresh_water_to_ocean_rate", "will provide", fresh)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_mean_salt_rate", "will provide", fsalt)
-!   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_net_heat_flx_to_ocn", "will provide", fhocn)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_faero_ocn", "will provide", faero_ocn)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_strairx_ocn", "will provide", strairx_ocn)
 !   call fld_list_add(fldsFrIce_num, fldsFrIce, "xx_strairy_ocn", "will provide", strairy_ocn)
