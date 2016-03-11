@@ -68,6 +68,7 @@ module cice_cap_mod
 
   type(ESMF_Grid), save :: ice_grid_i
   logical :: write_diagnostics = .true.
+  logical :: profile_memory = .true.
 
   contains
   !-----------------------------------------------------------------------
@@ -157,6 +158,7 @@ module cice_cap_mod
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
+
     call ESMF_AttributeGet(gcomp, name="DumpFields", value=value, defaultValue="true", &
       convention="NUOPC", purpose="Instance", rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -164,6 +166,14 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
     write_diagnostics=(trim(value)=="true")
+
+    call ESMF_AttributeGet(gcomp, name="ProfileMemory", value=value, defaultValue="true", &
+      convention="NUOPC", purpose="Instance", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    profile_memory=(trim(value)/="false")
     
   end subroutine
   
@@ -632,7 +642,7 @@ module cice_cap_mod
     character(len=*),parameter  :: subname='(cice_cap:ModelAdvance_slow)'
 
     rc = ESMF_SUCCESS
-    call ESMF_VMLogMemInfo("Entering CICE Model_ADVANCE: ")
+    if(profile_memory) call ESMF_VMLogMemInfo("Entering CICE Model_ADVANCE: ")
     write(info,*) subname,' --- run phase 1 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
 
@@ -895,9 +905,9 @@ module cice_cap_mod
 
     write(info,*) subname,' --- run phase 2 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
-    call ESMF_VMLogMemInfo("Before CICE_Run")
+    if(profile_memory) call ESMF_VMLogMemInfo("Before CICE_Run")
     call CICE_Run
-    call ESMF_VMLogMemInfo("Afterr CICE_Run")
+    if(profile_memory) call ESMF_VMLogMemInfo("Afterr CICE_Run")
     write(info,*) subname,' --- run phase 3 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
 
@@ -1171,7 +1181,7 @@ module cice_cap_mod
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_albedo_nir_dif", "will provide", alidf_ocn)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_2m_atm_ref_temperature", "will provide", Tref_ocn)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_2m_atm_ref_spec_humidity", "will provide", Qref_ocn)
-   call ESMF_VMLogMemInfo("Leaving CICE Model_ADVANCE: ")
+   if(profile_memory) call ESMF_VMLogMemInfo("Leaving CICE Model_ADVANCE: ")
   end subroutine 
 
   subroutine cice_model_finalize(gcomp, rc)
@@ -1694,7 +1704,7 @@ module cice_cap_mod
     real(ESMF_KIND_R8), dimension(:,:), pointer  :: f2d
     integer                  :: rc
 
-    return ! remove this line to debug field connection
+    if(.not. write_diagnostics) return ! remove this line to debug field connection
 
     field = ESMF_FieldCreate(grid, ESMF_TYPEKIND_R8, &
       indexflag=ESMF_INDEX_DELOCAL, &
