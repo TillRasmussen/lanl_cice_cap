@@ -602,6 +602,8 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_sssm(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_ocncz(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_ocncm(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_ocnci(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_ocncj(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_fmpot(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_mld(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_mzmf(:,:,:)
@@ -625,6 +627,8 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_strairyT(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_strocnxT(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_strocnyT(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_strocni(:,:,:)
+    real(ESMF_KIND_R8), pointer :: dataPtr_strocnj(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_fswthru(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_fswthruvdr(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_fswthruvdf(:,:,:)
@@ -811,6 +815,10 @@ module cice_cap_mod
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'ocn_current_merid',dataPtr_ocncm,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(importState,'ocn_current_idir',dataPtr_ocnci,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(importState,'ocn_current_jdir',dataPtr_ocncj,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'freezing_melting_potential',dataPtr_fmpot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(importState,'mixed_layer_depth',dataPtr_mld,rc=rc)
@@ -935,6 +943,10 @@ module cice_cap_mod
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'stress_on_ocn_ice_merid',dataPtr_strocnyT,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'stress_on_ocn_ice_idir',dataPtr_strocni,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
+    call State_getFldPtr(exportState,'stress_on_ocn_ice_jdir',dataPtr_strocnj,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'net_heat_flx_to_ocn',dataPtr_fhocn,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
     call State_getFldPtr(exportState,'mean_fresh_water_to_ocean_rate',dataPtr_fresh,rc=rc)
@@ -1020,6 +1032,8 @@ module cice_cap_mod
           vj = strocnyT(i,j,iblk)
           dataPtr_strocnxT(i1,j1,iblk) = ui*cos(ANGLET(i,j,iblk)) - vj*sin(ANGLET(i,j,iblk))  ! ice ocean stress
           dataPtr_strocnyT(i1,j1,iblk) = ui*sin(ANGLET(i,j,iblk)) + vj*cos(ANGLET(i,j,iblk))  ! ice ocean stress
+          dataPtr_strocni(i1,j1,iblk) = ui
+          dataPtr_strocnj(i1,j1,iblk) = vj
 !!          write(tmpstr,'(a,3i6,2x,g17.7)') subname//' aice = ',i,j,iblk,dataPtr_ifrac(i,j,iblk)
 !!          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO, rc=dbrc)
        enddo
@@ -1145,19 +1159,19 @@ module cice_cap_mod
    call dumpCICEInternal(ice_grid_i, export_slice, "stress_on_ocn_ice_zonal"         , "will provide", strocnxT)
    call dumpCICEInternal(ice_grid_i, export_slice, "stress_on_ocn_ice_merid"         , "will provide", strocnyT)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_sw_pen_to_ocn"              , "will provide", fswthru)
-   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_vis_dir_flx"        , "will provide", fswthruvdr)
-   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_vis_dif_flx"        , "will provide", fswthruvdf)
-   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_ir_dir_flx"         , "will provide", fswthruidr)
-   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_ir_dif_flx"         , "will provide", fswthruidf)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_vis_dir_flx"         , "will provide", fswthruvdr)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_vis_dif_flx"         , "will provide", fswthruvdf)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_ir_dir_flx"          , "will provide", fswthruidr)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_net_sw_ir_dif_flx"          , "will provide", fswthruidf)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_up_lw_flx_ice"              , "will provide", flwout)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_sensi_heat_flx_atm_into_ice", "will provide", fsens)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_laten_heat_flx_atm_into_ice", "will provide", flat)
    call dumpCICEInternal(ice_grid_i, export_slice, "mean_evap_rate_atm_into_ice"     , "will provide", evap)
-   call dumpCICEInternal(ice_grid_i, export_slice, "mean_fresh_water_to_ocean_rate", "will provide", fresh)
-   call dumpCICEInternal(ice_grid_i, export_slice, "mean_salt_rate", "will provide", fsalt)
-   call dumpCICEInternal(ice_grid_i, export_slice, "net_heat_flx_to_ocn", "will provide", fhocn)
-   call dumpCICEInternal(ice_grid_i, export_slice, "mean_ice_volume", "will provide", vice)
-   call dumpCICEInternal(ice_grid_i, export_slice, "mean_snow_volume", "will provide", vsno)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_fresh_water_to_ocean_rate"  , "will provide", fresh)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_salt_rate"                  , "will provide", fsalt)
+   call dumpCICEInternal(ice_grid_i, export_slice, "net_heat_flx_to_ocn"             , "will provide", fhocn)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_ice_volume"                 , "will provide", vice)
+   call dumpCICEInternal(ice_grid_i, export_slice, "mean_snow_volume"                , "will provide", vsno)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_inst_temp_height2m", "will provide", Tref)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_inst_spec_humid_height2m", "will provide", Qref)
    call dumpCICEInternal(ice_grid_i, export_slice, "xx_mean_albedo_vis_dir", "will provide", alvdr_ai)
@@ -1542,6 +1556,8 @@ module cice_cap_mod
     call fld_list_add(fldsToIce_num, fldsToIce, "sea_surface_slope_merid"  , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_zonal"        , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_merid"        , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_idir"         , "will provide")
+    call fld_list_add(fldsToIce_num, fldsToIce, "ocn_current_jdir"         , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "freezing_melting_potential", "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mixed_layer_depth"        , "will provide")
     call fld_list_add(fldsToIce_num, fldsToIce, "mean_zonal_moment_flx", "will provide")
@@ -1607,6 +1623,8 @@ module cice_cap_mod
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_air_ice_merid"         , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_zonal"         , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_merid"         , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_idir"          , "will provide")
+    call fld_list_add(fldsFrIce_num, fldsFrIce, "stress_on_ocn_ice_jdir"          , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_sw_pen_to_ocn"              , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dir_flx"         , "will provide")
     call fld_list_add(fldsFrIce_num, fldsFrIce, "mean_net_sw_vis_dif_flx"         , "will provide")
