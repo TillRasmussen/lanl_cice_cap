@@ -18,7 +18,7 @@ module cice_cap_mod
   use ice_calendar,  only: dt
   use ice_flux
   use ice_grid, only: TLAT, TLON, ULAT, ULON, hm, tarea, ANGLET, ANGLE, &
-                      dxt, dyt
+                      dxt, dyt, t2ugrid_vector
   use ice_state
   use CICE_RunMod
   use CICE_InitMod
@@ -873,10 +873,12 @@ module cice_cap_mod
           !vn = dataPtr_mmmf(i1,j1,iblk)
           !strax  (i,j,iblk) = -(ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk)))  ! lowest level wind stress or momentum flux (Pa)
           !stray  (i,j,iblk) = -(ue*cos(ANGLET(i,j,iblk)) - vn*sin(ANGLET(i,j,iblk)))  ! lowest level wind stress or momentum flux (Pa)
-          ue = dataPtr_ocncz  (i1,j1,iblk)
-          vn = dataPtr_ocncm  (i1,j1,iblk)
-          uocn   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! ocean current
-          vocn   (i,j,iblk) = -ue*sin(ANGLET(i,j,iblk)) + vn*cos(ANGLET(i,j,iblk))  ! ocean current
+!         ue = dataPtr_ocncz  (i1,j1,iblk)
+!         vn = dataPtr_ocncm  (i1,j1,iblk)
+!         uocn   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! ocean current
+!         vocn   (i,j,iblk) = -ue*sin(ANGLET(i,j,iblk)) + vn*cos(ANGLET(i,j,iblk))  ! ocean current
+          uocn   (i,j,iblk) = dataPtr_ocnci  (i1,j1,iblk)
+          vocn   (i,j,iblk) = dataPtr_ocncj  (i1,j1,iblk)
           ue = dataPtr_ubot  (i1,j1,iblk)
           vn = dataPtr_vbot  (i1,j1,iblk)
           uatm   (i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))  ! wind u component
@@ -902,13 +904,16 @@ module cice_cap_mod
             ss_tlty(i,j,iblk) = 0.0
           endif
           ! rotate onto local basis vectors
-          ue = ss_tltx   (i,j,iblk)
-          vn = ss_tlty   (i,j,iblk)
-          ss_tltx(i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))
-          ss_tlty(i,j,iblk) = -ue*sin(ANGLET(i,j,iblk)) + vn*cos(ANGLET(i,j,iblk))
+!         ue = ss_tltx   (i,j,iblk)
+!         vn = ss_tlty   (i,j,iblk)
+!         ss_tltx(i,j,iblk) = ue*cos(ANGLET(i,j,iblk)) + vn*sin(ANGLET(i,j,iblk))
+!         ss_tlty(i,j,iblk) = -ue*sin(ANGLET(i,j,iblk)) + vn*cos(ANGLET(i,j,iblk))
 
        enddo
        enddo
+
+       call t2ugrid_vector(ss_tltx)
+       call t2ugrid_vector(ss_tlty)
     enddo
 
     write(info,*) subname,' --- run phase 2 called --- '
