@@ -147,13 +147,27 @@ module cice_cap_mod
     type(ESMF_Clock)      :: clock
     integer, intent(out)  :: rc
     
-    character(len=10)                         :: value
+    character(len=10)     :: value
+    type(ESMF_VM)         :: vm
+    integer               :: lpet
 
     rc = ESMF_SUCCESS
 
     ! Switch to IPDv01 by filtering all other phaseMap entries
     call NUOPC_CompFilterPhaseMap(gcomp, ESMF_METHOD_INITIALIZE, &
       acceptStringList=(/"IPDv01p"/), rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+    call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+
+    call ESMF_VMGet(vm, localPet=lpet, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
@@ -174,6 +188,9 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
     profile_memory=(trim(value)/="false")
+
+    if(lpet == 0) &
+      print *, 'CICE DumpFields = ', write_diagnostics, 'ProfileMemory = ', profile_memory
     
   end subroutine
   
