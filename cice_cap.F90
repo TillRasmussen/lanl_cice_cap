@@ -69,6 +69,7 @@ module cice_cap_mod
   type(ESMF_Grid), save :: ice_grid_i
   logical :: write_diagnostics = .true.
   logical :: profile_memory = .true.
+  logical :: regional_mode = .false.
 
   contains
   !-----------------------------------------------------------------------
@@ -189,8 +190,17 @@ module cice_cap_mod
       return  ! bail out
     profile_memory=(trim(value)/="false")
 
+    call ESMF_AttributeGet(gcomp, name="RegionalMode", value=value, defaultValue="false", &
+      convention="NUOPC", purpose="Instance", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    regional_mode=(trim(value)=="true")
+
     if(lpet == 0) &
-      print *, 'CICE DumpFields = ', write_diagnostics, 'ProfileMemory = ', profile_memory
+      print *, 'CICE DumpFields = ', write_diagnostics, 'ProfileMemory = ', profile_memory &
+        , 'RegionalMode = ', regional_mode
     
   end subroutine
   
@@ -849,7 +859,9 @@ module cice_cap_mod
     call State_getFldPtr(importState,'air_density_height_lowest',dataPtr_rhoabot,rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU,line=__LINE__,file=__FILE__)) return
 
-    do iblk = 1,nblocks
+    ! Need special processing in regional mode, skip copying coupler input value in regional mode
+    if( .not. regional_mode) then
+     do iblk = 1,nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
        ilo = this_block%ilo
        ihi = this_block%ihi
@@ -931,7 +943,8 @@ module cice_cap_mod
 
        call t2ugrid_vector(ss_tltx)
        call t2ugrid_vector(ss_tlty)
-    enddo
+     enddo
+    endif
 
     write(info,*) subname,' --- run phase 2 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
