@@ -1051,8 +1051,8 @@ module cice_cap_mod
           vj = strairyT(i,j,iblk)
           dataPtr_strairxT(i1,j1,iblk) = ui*cos(ANGLET(i,j,iblk)) - vj*sin(ANGLET(i,j,iblk))  ! air ice stress
           dataPtr_strairyT(i1,j1,iblk) = ui*sin(ANGLET(i,j,iblk)) + vj*cos(ANGLET(i,j,iblk))  ! air ice stress
-          ui = strocnxT(i,j,iblk)
-          vj = strocnyT(i,j,iblk)
+          ui = -strocnxT(i,j,iblk)
+          vj = -strocnyT(i,j,iblk)
           dataPtr_strocnxT(i1,j1,iblk) = ui*cos(ANGLET(i,j,iblk)) - vj*sin(ANGLET(i,j,iblk))  ! ice ocean stress
           dataPtr_strocnyT(i1,j1,iblk) = ui*sin(ANGLET(i,j,iblk)) + vj*cos(ANGLET(i,j,iblk))  ! ice ocean stress
 !          dataPtr_strocni(i1,j1,iblk) = ui
