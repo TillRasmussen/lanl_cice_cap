@@ -614,6 +614,7 @@ module cice_cap_mod
     real(ESMF_KIND_R8)                     :: ue, vn, ui, vj
     real(ESMF_KIND_R8)                     :: sigma_r, sigma_l, sigma_c
     type(ESMF_StateItem_Flag)              :: itemType
+    integer                                :: cice_timestep = 1
     ! imports
     real(ESMF_KIND_R8), pointer :: dataPtr_mdlwfx(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_swvr(:,:,:)
@@ -949,7 +950,10 @@ module cice_cap_mod
     write(info,*) subname,' --- run phase 2 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
     if(profile_memory) call ESMF_VMLogMemInfo("Before CICE_Run")
-    call CICE_Run
+    if(cice_timestep == 1) then
+      call CICE_Run
+      cice_timestep = cice_timestep + 1
+    endif
     if(profile_memory) call ESMF_VMLogMemInfo("Afterr CICE_Run")
     write(info,*) subname,' --- run phase 3 called --- '
     call ESMF_LogWrite(info, ESMF_LOGMSG_INFO, rc=dbrc)
