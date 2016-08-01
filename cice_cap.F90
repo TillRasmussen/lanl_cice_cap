@@ -669,6 +669,7 @@ module cice_cap_mod
     real(ESMF_KIND_R8), pointer :: dataPtr_fsalt(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_vice(:,:,:)
     real(ESMF_KIND_R8), pointer :: dataPtr_vsno(:,:,:)
+    character(240)              :: msgString
     character(len=*),parameter  :: subname='(cice_cap:ModelAdvance_slow)'
 
     rc = ESMF_SUCCESS
@@ -695,7 +696,12 @@ module cice_cap_mod
     ! stopTime of the internal Clock has been reached.
     
     call ESMF_ClockPrint(clock, options="currTime", &
-      preString="------>Advancing CICE from: ", rc=rc)
+      preString="------>Advancing CICE from: ", unit=msgString, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
@@ -708,13 +714,17 @@ module cice_cap_mod
       return  ! bail out
     
     call ESMF_TimePrint(currTime + timeStep, &
-      preString="--------------------------------> to: ", rc=rc)
+      preString="--------------------------------> to: ", &
+      unit=msgString, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
-
-    call state_diagnose(importState, 'cice_import', rc)
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
 
   if(write_diagnostics) then
     import_slice = import_slice + 1
