@@ -1,11 +1,116 @@
-!--------------- LANL CICE NUOPC CAP -----------------
-! This is the LANL CICE model cap component that's NUOPC compiant.
-!
-! Author:  Fei.Liu@gmail.com
-!
-! 5/10/13
-! This is now acting as a cap/connector between NUOPC driver and LANL CICE code.
-!
+!>
+!! This is the LANL CICE model cap component that's NUOPC compliant.
+!!
+!! @mainpage CICE NUOPC Cap
+!! @author Fei Liu (Fei.Liu@gmail.com)
+!! @date 5/10/13
+!!
+!! @tableofcontents
+!!
+!! @section Overview Overview
+!!
+!! The CICE cap is the software that interfaces between a NUOPC-based component, 
+!! for example a NUOPC mediator, and the Los Alamos sea ice model. The CICE cap 
+!! package includes a single Fortran source file and two makefiles. The Fortran
+!! source file (cice_cap.F90) implementing a standard Fortran module uses ESMF 
+!! and NUOPC methods and labels to create a NUOPC Model component. It also uses
+!! variables and methods from LANL CICE modules to invoke LANL CICE methods and
+!! exchange data. The source file can be built into a linkable library and 
+!! Fortran module file (.mod) for inclusion in other Fortran source code.
+!!
+!! The CICE CAP implements a standard NUOPC Model Component, as such it
+!! implements the standard NUOPC initialization, run, and finalize phases. The 
+!! most important initialization phases are Field Advertise 
+!! (@ref cice_cap_mod::initializeadvertise) and Realize 
+!! (@ref cice_cap_mod::initializerealize). During
+!! Advertise, the cap sends a list of Field standard names to the NUOPC subsystem
+!! to perform handshaking. It also calls into CICE_Initialize with mpi_comm to 
+!! initialize CICE within the correct mpi communication group. During Realize, 
+!! based on the result of handshaking, import and export CICE Fields are created
+!! on ESMF Grid representing the internal CICE grid in the cap for data exchange.
+!! There is a single run phase in CICE CAP: cice_cap_mod::modeladvance_slow that prepares CICE 
+!! input, calls into CICE_RUN, and prepares CICE output. The finalize method 
+!! (@ref cice_cap_mod::cice_model_finalize) calls into CICE_Finalize.
+!!
+!! @section UnderlyingModelInterfaces Underlying Model Interfaces
+!!
+!! The methods used from the CICE model are CICE_Init, CICE_Run and CICE_Finalize.
+!! CICE_Run takes no argument. Additional CICE methods setting up CICE Grid are 
+!! called in the cap. They are get_block_parameter and ice_distributionGetBlockLoc.
+!! The CICE cap implements a non-nuopc method called dumpCICEInternal which writes
+!! the fields from ice_flux.F90 to netCDF files. This is an optional method that
+!! allows the modeler to check the value of the fields and have a better idea of 
+!! the state of CICE. This is useful to determine the impact of import and export 
+!! Field connections made on the CICE model.
+!!
+!! The NUOPC cap for CICE creates a set of temporary Field objects to facilitate 
+!! data exchange between mediator and internal CICE. This set of Field objects are 
+!! attached to import and export States and interact directly with mediator. The 
+!! corresponding exchange fields in LANL CICE are also stored internally in 
+!! ice_flux.F90. The import and export Fields from mediator are copied in/out of the
+!! LANL CICE with the data memory defined in ice_flux.F90. To achieve better 
+!! performance, the cap code can wrap around the data allocation in ice_flux.F90 
+!! directly to avoid additional copying. Memory allocation is done through 
+!! ESMF_FieldCreate indicated in the diagram on the left.
+!!
+!! @subsection VectorRotations Vector Rotations
+!!
+!! Vector rotation is done for import and export 2D vector fields in the NUOPC cap. 
+!! In CICE cap, this happens inside of @ref cice_cap_mod::modeladvance_slow call. 
+!! The vector fields are rotated from regular lat-lon grid to CICE grid before 
+!! CICE_Run and then rotated back to regular latlon Grid after CICE_Run. The effect
+!! of this is most obvious in the northern polar region where CICE operates on a 
+!! tri-pole Grid. Results on the T cell are also transformed to the U cell through 
+!! CICE internal method t2ugrid_vector.
+!!
+!! The following assumptions are made during vector rotation:
+!!
+!! - The components of the 2D vector fields line up with local lat-lon direction 
+!!   in the mediator, north and east are the local positive directions. The 
+!!   components are defined at cell center for all the grids.
+!!
+!! - The rotation angles defined in CICE and MOM5 are positive when measured counter 
+!!   clockwise (CCW) from local lat-lon directions. This is the conventional defintion
+!!   for the angular dimension in a polar coordinate system.
+!!
+!! As such, the imported vector field V must be rotated locally as the model component 
+!! local coordinate system is rotated CCW from well-defined lat-lon directions. 
+!! The CCW rotation matrix M is
+!!
+!!     cos \theta         sin \theta
+!!     -sin \theta        cos \theta
+!!
+!!  Rotated vector V' = M V
+!!
+!! The transpose of this matrix corresponding to a CW coordinate system rotation is 
+!! applied to the exported 2D vector fields before they are sent to the mediator.
+!!
+!! @section BuildingAndInstalling Building and Installing
+!!
+!! Of the two independent makefiles, makefile.nuopc links in ESMF/NUOPC library 
+!! and LANL CICE library from external environment variables inherited from NEMS 
+!! build system to create liblanl_cice.a; makefile is a generic makefile that 
+!! allows liblanl_cice.a built with user customizable settings.
+!! The build system, e.g. NEMSAppBuilder will pass pre-defined LANL CICE library 
+!! and include path and INSTALLDIR settings into makefile.nuopc. Upon completion, 
+!! liblanl_cice.a and cice_cap.mod will be copied to the INSTALLDIR to build
+!! NEMS.x with the rest of the coupled system.
+!!
+!! @subsection Dependencies Dependencies
+!!
+!! The CICE cap is only dependent on the CICE model itself, liblanl_cice.a.
+!! 
+!! @section RuntimeConfiguration Runtime Configuration
+!! 
+!!   - need info about runtime configuration
+!! 
+!! @section Repository
+!! The CICE NUOPC cap is maintained in a GitHub repository:
+!! https://github.com/feiliuesmf/lanl_cice_cap
+!!
+!! @section References 
+!!
+!!
 
 module cice_cap_mod
 
@@ -75,6 +180,12 @@ module cice_cap_mod
   !------------------- CICE code starts here -----------------------
   !-----------------------------------------------------------------------
 
+  !> NUOPC SetService method is the only public entry point.
+  !! SetServices registers all of the user-provided subroutines
+  !! in the module with the NUOPC layer.
+  !!
+  !! @param gcomp an ESMF_GridComp object
+  !! @param rc return code
   subroutine SetServices(gcomp, rc)
 
     type(ESMF_GridComp)  :: gcomp
@@ -141,6 +252,17 @@ module cice_cap_mod
 
   !-----------------------------------------------------------------------------
 
+  !> First initialize subroutine called by NUOPC.  The purpose
+  !! is to set which version of the Initialize Phase Definition (IPD)
+  !! to use.
+  !!
+  !! For this CICE cap, we are using IPDv01.
+  !!
+  !! @param gcomp an ESMF_GridComp object
+  !! @param importState an ESMF_State object for import fields
+  !! @param exportState an ESMF_State object for export fields
+  !! @param clock an ESMF_Clock object
+  !! @param rc return code
   subroutine InitializeP0(gcomp, importState, exportState, clock, rc)
     type(ESMF_GridComp)   :: gcomp
     type(ESMF_State)      :: importState, exportState
@@ -196,6 +318,16 @@ module cice_cap_mod
   
   !-----------------------------------------------------------------------------
 
+  !> Called by NUOPC to advertise import and export fields.  "Advertise"
+  !! simply means that the standard names of all import and export
+  !! fields are supplied.  The NUOPC layer uses these to match fields
+  !! between components in the coupled system.
+  !!
+  !! @param gcomp an ESMF_GridComp object
+  !! @param importState an ESMF_State object for import fields
+  !! @param exportState an ESMF_State object for export fields
+  !! @param clock an ESMF_Clock object
+  !! @param rc return code
   subroutine InitializeAdvertise(gcomp, importState, exportState, clock, rc)
 
     type(ESMF_GridComp)                    :: gcomp
@@ -242,6 +374,38 @@ module cice_cap_mod
   
   !-----------------------------------------------------------------------------
 
+  !> Called by NUOPC to realize import and export fields.  "Realizing" a field
+  !! means that its grid has been defined and an ESMF_Field object has been
+  !! created and put into the import or export State.
+  !!
+  !! CICE defines its own parallel decomposition in 2D blocks. The indices
+  !! are stored in i_glob and j_glob. These are used to create an ESMF_DistGrid
+  !! object using the deBlockList parameter.  The ESMF_DistGrid is set up with
+  !! a periodic boundary condition in the first (X) dimension and bipolar
+  !! boundary condition at the top row. These are set using calls to
+  !! ESMF_DistGridConnectionSet.  Information about how the decomposition
+  !! blocks are distributed among processors is determined by a call to
+  !! ice_distributionGetBlockLoc().
+  !!
+  !! Geographic coordinates are added to the ESMF_Grid object at center
+  !! and corner stagger locations.  CICE maintains these coordinates in
+  !! radians in the TLON, TLAT, ULON, and ULAT arrays.  They are converted
+  !! to degrees before adding to the ESMF_Grid object.  Cell areas are
+  !! set based on the CICE tarea array and cell masks are set based on
+  !! the hm array. 
+  !!
+  !! The fields to import and export are stored in the fldsToIce and fldsFrIce
+  !! arrays, respectively.  Each field entry includes the standard name, 
+  !! information about whether the field's grid will be provided by the cap,
+  !! and optionally a pointer to the field's data array.  Currently, all fields
+  !! are defined on the same grid defined by the cap (so set to "will provide").
+  !! The fields are created by calling cice_cap_mod::cice_realizefields.
+  !!
+  !! @param gcomp an ESMF_GridComp object
+  !! @param importState an ESMF_State object for import fields
+  !! @param exportState an ESMF_State object for export fields
+  !! @param clock an ESMF_Clock object
+  !! @param rc return code
   subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState, exportState
@@ -544,7 +708,15 @@ module cice_cap_mod
   
   !-----------------------------------------------------------------------------
 
-  ! CICE model uses same clock as parent gridComp
+  !> NUOPC specialization point to set up this cap's clock.
+  !!
+  !! By default, the clock is a copy of the clock coming in from the NUOPC
+  !! Driver.  In this case we are pulling in the thermodynamic timestep
+  !! from the CICE model (dt) an setting that as the "stability timestep."
+  !! This ensures that if dt is smaller than the Driver's requested timestep
+  !! length, it will use dt instead.  In this case, subcycling is automatically
+  !! handled by NUOPC, e.g., the CICE model will potentially be called multiple
+  !! times until it reaches the coupling timestep requested by the Driver.
   subroutine SetClock(gcomp, rc)
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
@@ -592,7 +764,24 @@ module cice_cap_mod
   end subroutine
 
   !-----------------------------------------------------------------------------
-
+  
+  !> Called by NUOPC to advance the CICE model a single timestep.
+  !!
+  !! This subroutine copies field data out of the cap import state and into the
+  !! model internal arrays.  Then it calls CICE_Run to make a single timestep.
+  !! Finally, it copies the updated arrays into the cap export state.
+  !!
+  !! This routine also writes out a diagnostic file for each import and export
+  !! field using NUOPC_FieldWrite.  The files are named field_ice_import_<fldname>.nc
+  !! and field_ice_export_<fldname>.nc, respectively.  In this subroutine there
+  !! are numerous calls to cice_cap_mod::state_getfldptr which is a convenience function to retrieve
+  !! the data pointer from an ESMF_State object based on the field's name.
+  !! 
+  !! At the end of the subroutine, a series of calls is made to cice_cap_mod::dumpciceinternal
+  !! which writes out a time slice of each CICE internal variable for diagnostic purposes.
+  !!  
+  !! @param gcomp an ESMF_GridComp object
+  !! @param rc return code
   subroutine ModelAdvance_slow(gcomp, rc)
     type(ESMF_GridComp)                    :: gcomp
     integer, intent(out)                   :: rc
@@ -1240,6 +1429,11 @@ module cice_cap_mod
    if(profile_memory) call ESMF_VMLogMemInfo("Leaving CICE Model_ADVANCE: ")
   end subroutine 
 
+  !> Called by NUOPC at the end of the run to clean up.  The cap does
+  !! this simply by calling CICE_Finalize.
+  !!
+  !! @param gcomp the ESMF_GridComp object
+  !! @param rc return code
   subroutine cice_model_finalize(gcomp, rc)
 
     ! input arguments
@@ -1275,6 +1469,13 @@ module cice_cap_mod
 
   end subroutine cice_model_finalize
 
+  !> Advertises a set of fields in an ESMF_State object by calling
+  !! NUOPC_Advertise in a loop.
+  !!
+  !! @param state the ESMF_State object in which to advertise the fields
+  !! @param nfield number of fields
+  !! @param field_defs an array of fld_list_type listing the fields to advertise
+  !! @param rc return code
   subroutine CICE_AdvertiseFields(state, nfields, field_defs, rc)
 
     type(ESMF_State), intent(inout)             :: state
@@ -1308,6 +1509,16 @@ module cice_cap_mod
 
   end subroutine CICE_AdvertiseFields
 
+  !> Adds a set of fields to an ESMF_State object.  Each field is wrapped
+  !! in an ESMF_Field object.  Memory is either allocated by ESMF or
+  !! an existing CICE pointer is referenced.
+  !! 
+  !! @param state the ESMF_State object to add fields to
+  !! @param grid the ESMF_Grid object on which to define the fields
+  !! @param nfields number of fields
+  !! @param field_defs array of fld_list_type indicating the fields to add
+  !! @param tag used to output to the log
+  !! @param rc return code
   subroutine CICE_RealizeFields(state, grid, nfields, field_defs, tag, rc)
 
     type(ESMF_State), intent(inout)             :: state
@@ -1502,6 +1713,12 @@ module cice_cap_mod
 
   !-----------------------------------------------------------------------------
 
+  !> Retrieve a pointer to a field's data array from inside an ESMF_State object.
+  !!
+  !! @param ST the ESMF_State object
+  !! @param fldname name of the fields
+  !! @param fldptr pointer to 3D array
+  !! @param rc return code
   subroutine State_GetFldPtr(ST, fldname, fldptr, rc)
     type(ESMF_State), intent(in) :: ST
     character(len=*), intent(in) :: fldname
@@ -1752,6 +1969,14 @@ module cice_cap_mod
 
   end subroutine fld_list_add
 
+  !> Writes out a diagnostic file containing field data named
+  !! field_ice_internal_<fldname>.nc.
+  !!
+  !! @param the ESMF_Grid on describing the field's grid
+  !! @param slice time spice number
+  !! @param stdname standard name of the field
+  !! @param nop ignored for now
+  !! @param farray array of data to write
   subroutine dumpCICEInternal(grid, slice, stdname, nop, farray)
 
     type(ESMF_Grid)          :: grid
