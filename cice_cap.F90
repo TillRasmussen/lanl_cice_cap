@@ -102,7 +102,12 @@
 !! 
 !! @section RuntimeConfiguration Runtime Configuration
 !! 
-!!   - need info about runtime configuration
+!! CICE cap accepts two runtime configuration parameters (DumpFields and ProfileMemory)
+!! though component level attribute settings. 
+!! By default, DumpFields is true. When turned on to true, diagnose netCDF files
+!! of incoming and outgoing fields will be written.
+!! By default, ProfileMemory is true. When turned on to true, run time memory
+!! profiling information will be written to ESMF PET log files.
 !! 
 !! @section Repository
 !! The CICE NUOPC cap is maintained in a GitHub repository:
@@ -776,6 +781,12 @@ module cice_cap_mod
   !! and field_ice_export_<fldname>.nc, respectively.  In this subroutine there
   !! are numerous calls to cice_cap_mod::state_getfldptr which is a convenience function to retrieve
   !! the data pointer from an ESMF_State object based on the field's name.
+  !!
+  !! All incoming vectors from mediator are rotated counter clock wise onto local basis vector directions.
+  !! All outgoing vectors to mediator are rotated clock wise onto regular lat-lon directions.
+  !! Zonal and meridional sea surface slope fields are calculated from sea level input and
+  !! rotated counter clock wise onto local basis vector directions. Internally LANL cice
+  !! uses the zonal and meridional sea surface slope fields calculated here.
   !! 
   !! At the end of the subroutine, a series of calls is made to cice_cap_mod::dumpciceinternal
   !! which writes out a time slice of each CICE internal variable for diagnostic purposes.
