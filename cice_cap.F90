@@ -1,38 +1,110 @@
 !>
-!! This is the LANL CICE model cap component that's NUOPC compliant.
-!!
-!! @mainpage CICE NUOPC Cap
-!! @author Fei Liu (Fei.Liu@gmail.com)
-!! @date 5/10/13
+!! @mainpage Los Alamos Sea Ice (CICE) NUOPC Cap
+!! @author Fei Liu (fei.liu@gmail.com)
+!! @author Rocky Dunlap (rocky.dunlap@noaa.gov)
+!! @date 5/10/13 Original documentation
+!! @date 10/6/16 Moved to doxygen
 !!
 !! @tableofcontents
 !!
 !! @section Overview Overview
 !!
-!! The CICE cap is the software that interfaces between a NUOPC-based component, 
-!! for example a NUOPC mediator, and the Los Alamos sea ice model. The CICE cap 
-!! package includes a single Fortran source file and two makefiles. The Fortran
-!! source file (cice_cap.F90) implementing a standard Fortran module uses ESMF 
-!! and NUOPC methods and labels to create a NUOPC Model component. It also uses
-!! variables and methods from LANL CICE modules to invoke LANL CICE methods and
-!! exchange data. The source file can be built into a linkable library and 
-!! Fortran module file (.mod) for inclusion in other Fortran source code.
+!! This document describes the CICE "cap", which is a small software layer that is 
+!! required when the [Los Alamos sea ice model] (http://oceans11.lanl.gov/trac/CICE) 
+!! is used in [National Unified Operation Prediction Capability] 
+!! (http://www.earthsystemcog.org/projects/nuopc) (NUOPC) coupled systems.
+!! The NUOPC Layer is a software layer built on top of the [Earth System Modeling 
+!! Framework] (https://www.earthsystemcog.org/projects/esmf) (ESMF). 
+!! ESMF is a high-performance modeling framework that provides
+!! data structures, interfaces, and operations suited for building coupled models
+!! from a set of components. NUOPC refines the capabilities of ESMF by providing
+!! a more precise definition of what it means for a model to be a component and 
+!! how components should interact and share data in a coupled system. The NUOPC
+!! Layer software is designed to work with typical high-performance models in the
+!! Earth sciences domain, most of which are written in Fortran and are based on a 
+!! distributed memory model of parallelism (MPI). 
+!! A NUOPC "cap" is a Fortran module that serves as the interface to a model 
+!! when it's used in a NUOPC-based coupled system. 
+!! The term "cap" is used because it is a small software layer that sits on top 
+!! of model code, making calls into it and exposing model data structures in a 
+!! standard way. 
 !!
-!! The CICE CAP implements a standard NUOPC Model Component, as such it
-!! implements the standard NUOPC initialization, run, and finalize phases. The 
-!! most important initialization phases are Field Advertise 
-!! (@ref cice_cap_mod::initializeadvertise) and Realize 
-!! (@ref cice_cap_mod::initializerealize). During
-!! Advertise, the cap sends a list of Field standard names to the NUOPC subsystem
-!! to perform handshaking. It also calls into CICE_Initialize with mpi_comm to 
-!! initialize CICE within the correct mpi communication group. During Realize, 
-!! based on the result of handshaking, import and export CICE Fields are created
-!! on ESMF Grid representing the internal CICE grid in the cap for data exchange.
-!! There is a single run phase in CICE CAP: cice_cap_mod::modeladvance_slow that prepares CICE 
-!! input, calls into CICE_RUN, and prepares CICE output. The finalize method 
-!! (@ref cice_cap_mod::cice_model_finalize) calls into CICE_Finalize.
+!! The CICE cap package contains a single Fortran source file and two makefiles. The Fortran
+!! source file (cice_cap.F90) implements a standard Fortran module that uses ESMF 
+!! and NUOPC methods and labels to create a NUOPC Model component. It also uses
+!! variables and subroutines from CICE modules to invoke CICE subroutines and
+!! exchange data. The source file can be built into a linkable library and 
+!! Fortran module file (.mod) for inclusion in other Fortran programs.
+!!
+!! @image html docimages/CAP_Anatomy_small.jpg "Architecture diagram showing how the CICE cap is an interface layer between the model code and the NUOPC coupling infrastructure"
+!!
+!! @subsection CapSubroutines Cap Subroutines
+!!
+!! The CICE cap Fortran module contains a set of subroutines that are required
+!! by NUOPC.  These subroutines are called by the NUOPC infrastructure according
+!! to a predefined calling sequence.  Some subroutines are called during
+!! initialization of the coupled system, some during the run of the coupled
+!! system, and some during finalization of the coupled system.  The initialization
+!! sequence is the most complex and is governed by the NUOPC technical rules.
+!! Details about the initialization sequence can be found in the [NUOPC Reference Manual]
+!! (http://www.earthsystemmodeling.org/esmf_releases/non_public/ESMF_7_0_0/NUOPC_refdoc/node3.html#SECTION00034000000000000000).
+!!
+!! A particularly important part of the NUOPC intialization sequence is to establish
+!! field connections between models.  Simply put, a field connection is established
+!! when a field output by one model can be consumed by another.  As an example, the
+!! CICE model is able to accept a precipitation rate when coupled to an atmosphere
+!! model.  In this case a field connection will be established between the precipitation
+!! rate exported from the atmosphere and the precipitation rate imported into the
+!! CICE model.  Because models may uses different variable names for physical
+!! quantities, NUOPC relies on a set of standard names and a built-in, extensible
+!! standard name dictionary to match fields between models.  More information about
+!! the use of standard names can be found in the [NUOPC Reference Manual]
+!! (http://www.earthsystemmodeling.org/esmf_releases/non_public/ESMF_7_0_0/NUOPC_refdoc/node3.html#SECTION00032000000000000000).
+!!
+!! Two key initialization phases that appear in every NUOPC cap, including this CICE
+!! cap are the field "advertise" and field "realize" phases.  *Advertise* is a special
+!! NUOPC term that refers to a model participating in a coupled system 
+!! providing a list of standard names of required import fields and available export
+!! fields.  In other words, each model will advertise to the other models which physical fields
+!! it needs and which fields it can provide when coupled. NUOPC compares all of the advertised
+!! standard names and creates a set of unidirectional links, each from one export field
+!! in a model to one import field in another model.  When these connections have been established
+!! all models in the coupled system need to provide a description of their geographic
+!! grid (e.g., lat-lon, tri-polar, cubed sphere, etc.) and allocate their connected
+!! fields on that grid.  In NUOPC terms, this is refered to as *realizing* a set of
+!! fields.  NUOPC relies on ESMF data types for this, such as the [ESMF_Grid]
+!! (http://www.earthsystemmodeling.org/esmf_releases/public/last/ESMF_refdoc/node5.html#SECTION05080000000000000000)
+!! type, which describes logically rectangular grids and the [ESMF_Field]
+!! (http://www.earthsystemmodeling.org/esmf_releases/public/last/ESMF_refdoc/node5.html#SECTION05030000000000000000)
+!! type, which wraps a models data arrays and provides basic metadata. As you will see below
+!! the *advertise* and *realize* phases each have a subroutine in the CICE cap.
+!! 
+!! The following table summarizes the NUOPC-required subroutines that appear in the
+!! CICE cap.  The "Phase" column says whether the subroutine is called during the
+!! initialization, run, or finalize part of the coupled system run. 
+!!
+!!
+!! Phase    | CICE Cap Subroutine                                                |  Description
+!! ---------|--------------------------------------------------------------------|-------------------------------------------------------------
+!! Init     | [InitializeP0] (@ref cice_cap_mod::initializep0)                   | Sets the Initialize Phase Definition (IPD) version to use
+!! Init     | [InitializeAdvertise] (@ref cice_cap_mod::initializeadvertise)     | Advertises standard names of import and export fields
+!! Init     | [InitializeRealize] (@ref cice_cap_mod::initializerealize)         | Creates an ESMF_Grid for the CICE grid as well as ESMF_Fields for import and export fields
+!! Init     | [SetClock] (@ref cice_cap_mod::setclock)                           | Before the run, sets up the timestep interval
+!! Run      | [ModelAdvance_Slow] (@ref cice_cap_mod::modeladvance_slow)         | Advances the model by a timestep by calling CICE_Run
+!! Final    | [CICE_Model_Finalize] (@ref cice_cap_mod::cice_model_finalize)     | Cleans up by calling CICE_Finalize
 !!
 !! @section UnderlyingModelInterfaces Underlying Model Interfaces
+!!
+!! @subsection ModelConfiguration Model Configuration
+!!
+!! @subsection DomainCreation Domain Creation
+!!
+!! @subsection Initialization Initialization
+!!
+!! @subsection Run Run
+!!
+!! @subsection Finalization Finalization
+!!
 !!
 !! The methods used from the CICE model are CICE_Init, CICE_Run and CICE_Finalize.
 !! CICE_Run takes no argument. Additional CICE methods setting up CICE Grid are 
