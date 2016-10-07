@@ -31,9 +31,11 @@
 !!
 !! The CICE cap package contains a single Fortran source file and two makefiles. The Fortran
 !! source file (cice_cap.F90) implements a standard Fortran module that uses ESMF 
-!! and NUOPC methods and labels to create a NUOPC Model component. It also uses
+!! and NUOPC methods and labels to create a NUOPC cap for CICE. It also uses
 !! variables and subroutines from CICE modules to invoke CICE subroutines and
-!! exchange data. The source file can be built into a linkable library and 
+!! exchange data. In the simplest terms, the CICE cap should be thought of as a thin 
+!! translation layer between the CICE Fortran code and the NUOPC infrastrucutre.  
+!! The source file can be built into a linkable library and 
 !! Fortran module file (.mod) for inclusion in other Fortran programs.
 !!
 !! @image html docimages/CAP_Anatomy_small.jpg "Architecture diagram showing how the CICE cap is an interface layer between the model code and the NUOPC coupling infrastructure"
@@ -68,7 +70,7 @@
 !! fields.  In other words, each model will advertise to the other models which physical fields
 !! it needs and which fields it can provide when coupled. NUOPC compares all of the advertised
 !! standard names and creates a set of unidirectional links, each from one export field
-!! in a model to one import field in another model.  When these connections have been established
+!! in a model to one import field in another model.  When these connections have been established,
 !! all models in the coupled system need to provide a description of their geographic
 !! grid (e.g., lat-lon, tri-polar, cubed sphere, etc.) and allocate their connected
 !! fields on that grid.  In NUOPC terms, this is refered to as *realizing* a set of
@@ -76,7 +78,9 @@
 !! (http://www.earthsystemmodeling.org/esmf_releases/public/last/ESMF_refdoc/node5.html#SECTION05080000000000000000)
 !! type, which describes logically rectangular grids and the [ESMF_Field]
 !! (http://www.earthsystemmodeling.org/esmf_releases/public/last/ESMF_refdoc/node5.html#SECTION05030000000000000000)
-!! type, which wraps a models data arrays and provides basic metadata. As you will see below
+!! type, which wraps a models data arrays and provides basic metadata. Because ESMF supports
+!! interpolation between different grids (sometimes called "regridding" or "grid remapping"), 
+!! it is not necessary that models share a grid.  As you will see below
 !! the *advertise* and *realize* phases each have a subroutine in the CICE cap.
 !! 
 !! The following table summarizes the NUOPC-required subroutines that appear in the
@@ -99,12 +103,70 @@
 !!
 !! @subsection DomainCreation Domain Creation
 !!
+!! As outlined in section 4.2 of the [CICE user's guide] 
+!! (http://oceans11.lanl.gov/trac/CICE/attachment/wiki/WikiStart/cicedoc.pdf?format=raw),
+!! the CICE model supports several kinds of grids: regular rectangular, regional,
+!! displaced_pole, and tripolar.  The CICE cap currently only supports the
+!! tripolar grid with a single southern pole and a bipole in northern latitudes.
+!! The plots below show the latitude and longitude coordinate values (radians) 
+!! for a 0.5 degree (720x410 cells) tripolar grid.
+!!
+!!  <table border="0"><tr>
+!!  <td>@image html docimages/cice_grid_ulat.png "Latitude coordinates of tripolar grid"</td>
+!!  <td>@image html docimages/cice_grid_ulon.png "Longitude coordinates of tripolar grid"</td>
+!!  </tr></table>
+!! 
+!! No changes were made to the native CICE mechanisms for setting up the grid.
+!! This procedure happens as part of the call to `CICE_Initialize()`.  After CICE sets up
+!! its grid, the grid structure is translated into an `ESMF_Grid` object.  Setting
+!! up the `ESMF_Grid` is handled as part of the [InitializeRealize] 
+!! (@ref cice_cap_mod::initializerealize) subroutine.  All of the details of the tripolar
+!! grid must be provided to ESMF, including:
+!!   - the global number of cells in the X and Y directions, 
+!!   - how the global grid is decomposed into blocks, 
+!!   - the connectivity along the southern and northern rows (to set up the northern bipole),
+!!   - the periodic boundary condition in the X direction,
+!!   - the center (called "T cell" in the CICE manual) and corner coordinates ("U cell") for all grid points,  
+!!   - the grid cell areas, and
+!!   - the grid cell land/sea mask.
+!! 
+!! CICE already has data structures to represent all of these grid features. However, NUOPC
+!! infrastrucuture requires a standard representation of grids using ESMF types. Since the
+!! tripolar grid is a logically rectangular grid (there is an underlying X-Y index space),
+!! the [ESMF_Grid] (http://www.earthsystemmodeling.org/esmf_releases/public/last/ESMF_refdoc/node5.html#SECTION05080000000000000000) 
+!! type is used.  Setting up the `ESMF_Grid` requires accessing some of the ice domain 
+!! variables inside CICE.  Refer to the "use" statements at the top of the cap (listed below)
+!! to see which domain variables are accessed by the cap.
+!!
+!! @code
+!!  use ice_blocks, only: nx_block, ny_block, nblocks_tot, block, get_block, &
+!!                        get_block_parameter
+!!  use ice_domain_size, only: max_blocks, nx_global, ny_global
+!!  use ice_domain, only: nblocks, blocks_ice, distrb_info
+!!  use ice_distribution, only: ice_distributiongetblockloc
+!!  use ice_constants, only: Tffresh, rad_to_deg
+!!  use ice_calendar,  only: dt
+!!  use ice_flux
+!!  use ice_grid, only: TLAT, TLON, ULAT, ULON, hm, tarea, ANGLET, ANGLE, &
+!!                      dxt, dyt, t2ugrid_vector
+!!  use ice_state
+!!  use CICE_RunMod
+!!  use CICE_InitMod
+!!  use CICE_FinalMod  
+!! @endcode
+!!
+!! The ESMF_Grid is set up in several steps inside [InitializeRealize]
+!! (@ref cice_cap_mod::initializerealize). The `deBlockList` variables is used
+!! to store the min and max indices of each decomposition block. This is populated
+!! by calling the CICE subroutine `get_block_parameters()`.
+!!
 !! @subsection Initialization Initialization
 !!
 !! @subsection Run Run
 !!
 !! @subsection Finalization Finalization
 !!
+!! @image html docimages/CICE_CAP_Methods_small.png "A high level view of the code organization of the CICE cap"
 !!
 !! The methods used from the CICE model are CICE_Init, CICE_Run and CICE_Finalize.
 !! CICE_Run takes no argument. Additional CICE methods setting up CICE Grid are 
