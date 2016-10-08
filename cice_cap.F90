@@ -29,6 +29,8 @@
 !! of model code, making calls into it and exposing model data structures in a 
 !! standard way. 
 !!
+!! **This CICE cap has been tested with versions 4.0 and 5.0.2 of CICE.**
+!!
 !! The CICE cap package contains a single Fortran source file and two makefiles. The Fortran
 !! source file (cice_cap.F90) implements a standard Fortran module that uses ESMF 
 !! and NUOPC methods and labels to create a NUOPC cap for CICE. It also uses
@@ -99,7 +101,11 @@
 !!
 !! @section UnderlyingModelInterfaces Underlying Model Interfaces
 !!
-!! @subsection ModelConfiguration Model Configuration
+!! The following diagram shows a diagram of how the CICE cap code is structured.  Red boxes are
+!! subroutines that are registered with NUOPC.  Light blue boxes are calls into CICE subroutines.
+!! Yellow boxes are calls into the ESMF/NUOPC library.
+!!
+!! @image html docimages/CICE_CAP_Methods_small.png "A high level view of the code organization of the CICE cap"
 !!
 !! @subsection DomainCreation Domain Creation
 !!
@@ -158,52 +164,79 @@
 !! The ESMF_Grid is set up in several steps inside [InitializeRealize]
 !! (@ref cice_cap_mod::initializerealize). The `deBlockList` variables is used
 !! to store the min and max indices of each decomposition block. This is populated
-!! by calling the CICE subroutine `get_block_parameters()`.
+!! using index values from the CICE subroutine `get_block_parameters()`. The
+!! `petMap` array is used to store, for each block, the processor that is
+!! assigned to that block.  This information is retrieved by calling the 
+!! CICE subroutine `ice_distributionGetBlockLoc()`.  The `petMap` is then used
+!! to create an [ESMF_DELayout]
+!! (http://www.earthsystemmodeling.org/esmf_releases/public/last/ESMF_refdoc/node6.html#SECTION060110000000000000000), 
+!! which describes how decomposition elements (blocks in CICE terms) are assigned
+!! to PETs (processors).
+!!
+!! The global CICE grid index space (`nx_global` x `ny_global`) is set up as an [ESMF_DistGrid]
+!! (http://www.earthsystemmodeling.org/esmf_releases/last_built/ESMF_refdoc/node5.html#SECTION050120000000000000000)
+!! by passing it the `deBlockList`, `delayout`, and a `connectionList` which defines
+!! the periodic boundary condition in the X direction and bipole at the top. Finally,
+!! the `ESMF_Grid` is created from the `ESMF_DistGrid`. The `ESMF_Grid` will use the
+!! index space defined by the `ESMF_DistGrid` and geographic coordinates are assigned
+!! to cell centers and corners.  The center coordinates are populating using the CICE
+!! `TLON` and `TLAT` arrays and the corners using the `ULON` and `ULAT` arrays. Also
+!! assigned are the cell areas (using the `tarea` array) and the grid mask (using the
+!! `hm` array).  Details of how the CICE grid is set up internally in the model is
+!! beyond the scope of this cap documentation, however the reader is refered to 
+!! section 4.2 of the [CICE user's guide] (http://oceans11.lanl.gov/trac/CICE/attachment/wiki/WikiStart/cicedoc.pdf?format=raw)
+!! for more information.
+!!
 !!
 !! @subsection Initialization Initialization
 !!
+!! The CICE cap calls into the native `CICE_Initialize()` subroutine in the
+!! [InitializeAdvertise] (@ref cice_cap_mod::initializeadvertise) subroutine.
+!! The only parameter passed is the MPI communicator.  The global MPI communicator
+!! is managed by ESMF and is retrieved from the current `ESMF_VM`. 
+!!
 !! @subsection Run Run
 !!
-!! @subsection Finalization Finalization
+!! The CICE cap calls into the native `CICE_Run()` subroutine in the
+!! [ModelAdvance_Slow] (@ref cice_cap_mod::modeladvance_slow) subroutine. The internal
+!! CICE timestepping loop has been disabled when using the NUOPC cap since the
+!! main driver loop is provided by the NUOPC infrastructure at a level above
+!! the CICE model.  Therefore, a call into `CICE_Run()` will only advance the
+!! CICE model by a single time step.  
 !!
-!! @image html docimages/CICE_CAP_Methods_small.png "A high level view of the code organization of the CICE cap"
+!! Prior to calling `CICE_Run()` the cap copies fields from the import
+!! `ESMF_State` into the corresponding data arrays inside the model. The import state
+!! contains a set of fields brought in through the NUOPC coupling infrastructure.
+!! These native model arrays are defined in the file ice_flux.F90.
+!! After copying in the import state fields, the call is made to `CICE_Run()`.  After
+!! the run, model fields are copied into the export `ESMF_State` so that NUOPC can
+!! transfer these fields to other models as required.
 !!
-!! The methods used from the CICE model are CICE_Init, CICE_Run and CICE_Finalize.
-!! CICE_Run takes no argument. Additional CICE methods setting up CICE Grid are 
-!! called in the cap. They are get_block_parameter and ice_distributionGetBlockLoc.
-!! The CICE cap implements a non-nuopc method called dumpCICEInternal which writes
-!! the fields from ice_flux.F90 to netCDF files. This is an optional method that
+!! The CICE cap implements a subroutine called `dumpCICEInternal` that writes
+!! the fields from ice_flux.F90 to NetCDF files. This is an optional method that
 !! allows the modeler to check the value of the fields and have a better idea of 
 !! the state of CICE. This is useful to determine the impact of import and export 
-!! Field connections made on the CICE model.
+!! Field connections made on the CICE model. Writing out of these fields during the
+!! run phase is controlled by the ESMF Attribute "DumpFields." This is read in
+!! during [InitializeP0] (@ref cice_cap_mod::initializep0). 
 !!
-!! The NUOPC cap for CICE creates a set of temporary Field objects to facilitate 
-!! data exchange between mediator and internal CICE. This set of Field objects are 
-!! attached to import and export States and interact directly with mediator. The 
-!! corresponding exchange fields in LANL CICE are also stored internally in 
-!! ice_flux.F90. The import and export Fields from mediator are copied in/out of the
-!! LANL CICE with the data memory defined in ice_flux.F90. To achieve better 
-!! performance, the cap code can wrap around the data allocation in ice_flux.F90 
-!! directly to avoid additional copying. Memory allocation is done through 
-!! ESMF_FieldCreate indicated in the diagram on the left.
-!!
-!! @subsection VectorRotations Vector Rotations
+!! @subsubsection VectorRotations Vector Rotations
 !!
 !! Vector rotation is done for import and export 2D vector fields in the NUOPC cap. 
-!! In CICE cap, this happens inside of @ref cice_cap_mod::modeladvance_slow call. 
-!! The vector fields are rotated from regular lat-lon grid to CICE grid before 
-!! CICE_Run and then rotated back to regular latlon Grid after CICE_Run. The effect
+!! In CICE cap, this happens inside of [ModelAdvance_Slow] (@ref cice_cap_mod::modeladvance_slow). 
+!! The vector fields are rotated from a regular lat-lon grid to the CICE grid before 
+!! `CICE_Run` and then rotated back to regular lat-lon grid after `CICE_Run`. The effect
 !! of this is most obvious in the northern polar region where CICE operates on a 
-!! tri-pole Grid. Results on the T cell are also transformed to the U cell through 
+!! tripolar grid. Results on the T cell are also transformed to the U cell through 
 !! CICE internal method t2ugrid_vector.
 !!
 !! The following assumptions are made during vector rotation:
 !!
 !! - The components of the 2D vector fields line up with local lat-lon direction 
-!!   in the mediator, north and east are the local positive directions. The 
+!!   where north and east are the local positive directions. The 
 !!   components are defined at cell center for all the grids.
 !!
-!! - The rotation angles defined in CICE and MOM5 are positive when measured counter 
+!! - The rotation angles are positive when measured counter 
 !!   clockwise (CCW) from local lat-lon directions. This is the conventional defintion
 !!   for the angular dimension in a polar coordinate system.
 !!
@@ -217,18 +250,87 @@
 !!  Rotated vector V' = M V
 !!
 !! The transpose of this matrix corresponding to a CW coordinate system rotation is 
-!! applied to the exported 2D vector fields before they are sent to the mediator.
+!! applied to the exported 2D vector fields before they are exported.
+!!
+!! @subsection Finalization Finalization
+!!
+!! To finalize the model, the CICE cap simple calls into the native `CICE_Finalize()`
+!! subroutine.
+!!
+!!
+!! @section ModelFields Model Fields
+!!
+!! The following tables list the import and export fields currently set up in the CICE cap.
+!!
+!! @subsection ImportFields Import Fields 
+!!  - inst_height_lowest                         
+!!  - inst_temp_height_lowest
+!!  - inst_spec_humid_height_lowest
+!!  - inst_zonal_wind_height_lowest
+!!  - inst_merid_wind_height_lowest
+!!  - inst_pres_height_lowest
+!!  - mean_down_lw_flx
+!!  - mean_down_sw_vis_dir_flx
+!!  - mean_down_sw_vis_dif_flx
+!!  - mean_down_sw_ir_dir_flx
+!!  - mean_down_sw_ir_dif_flx
+!!  - mean_prec_rate
+!!  - mean_fprec_rate
+!!  - sea_surface_temperature
+!!  - s_surf
+!!  - sea_lev
+!!  - sea_surface_slope_zonal
+!!  - sea_surface_slope_merid
+!!  - ocn_current_zonal
+!!  - ocn_current_merid
+!!  - freezing_melting_potential
+!!  - mixed_layer_depth
+!!  - mean_zonal_moment_flx
+!!  - mean_merid_moment_flx
+!!  - inst_surface_height
+!!  - inst_temp_height2m
+!!  - inst_spec_humid_height2m
+!!  - air_density_height_lowest
+!!
+!! @subsection ExportField Export Fields
+!!
+!!  - sea_ice_temperature
+!!  - inst_ice_vis_dir_albedo
+!!  - inst_ice_ir_dir_albedo
+!!  - inst_ice_vis_dif_albedo
+!!  - inst_ice_ir_dif_albedo
+!!  - ice_mask
+!!  - ice_fraction
+!!  - stress_on_air_ice_zonal
+!!  - stress_on_air_ice_merid
+!!  - stress_on_ocn_ice_zonal
+!!  - stress_on_ocn_ice_merid
+!!  - mean_sw_pen_to_ocn
+!!  - mean_net_sw_vis_dir_flx
+!!  - mean_net_sw_vis_dif_flx
+!!  - mean_net_sw_ir_dir_flx
+!!  - mean_net_sw_ir_dif_flx
+!!  - mean_up_lw_flx_ice
+!!  - mean_sensi_heat_flx_atm_into_ice
+!!  - mean_laten_heat_flx_atm_into_ice
+!!  - mean_evap_rate_atm_into_ice
+!!  - mean_fresh_water_to_ocean_rate
+!!  - mean_salt_rate
+!!  - net_heat_flx_to_ocn
+!!  - mean_ice_volume
+!!  - mean_snow_volume
+!!
 !!
 !! @section BuildingAndInstalling Building and Installing
 !!
-!! Of the two independent makefiles, makefile.nuopc links in ESMF/NUOPC library 
-!! and LANL CICE library from external environment variables inherited from NEMS 
+!! Of the two independent makefiles, makefile.nuopc links in the ESMF/NUOPC library 
+!! and LANL CICE library from external environment variables inherited from an external 
 !! build system to create liblanl_cice.a; makefile is a generic makefile that 
-!! allows liblanl_cice.a built with user customizable settings.
-!! The build system, e.g. NEMSAppBuilder will pass pre-defined LANL CICE library 
+!! allows liblanl_cice.a to be built with user customizable settings.
+!! The build system should pass pre-defined LANL CICE library 
 !! and include path and INSTALLDIR settings into makefile.nuopc. Upon completion, 
-!! liblanl_cice.a and cice_cap.mod will be copied to the INSTALLDIR to build
-!! NEMS.x with the rest of the coupled system.
+!! liblanl_cice.a and cice_cap.mod will be copied to the INSTALLDIR and can
+!! be linked into a coupled application with other components.
 !!
 !! @subsection Dependencies Dependencies
 !!
@@ -237,17 +339,20 @@
 !! @section RuntimeConfiguration Runtime Configuration
 !! 
 !! CICE cap accepts two runtime configuration parameters (DumpFields and ProfileMemory)
-!! though component level attribute settings. 
-!! By default, DumpFields is true. When turned on to true, diagnose netCDF files
+!! though component level ESMF Attribute settings. 
+!! By default, DumpFields is true. When turned on to true, diagnose NetCDF files
 !! of incoming and outgoing fields will be written.
 !! By default, ProfileMemory is true. When turned on to true, run time memory
-!! profiling information will be written to ESMF PET log files.
+!! profiling information will be written to ESMF log files.
 !! 
 !! @section Repository
 !! The CICE NUOPC cap is maintained in a GitHub repository:
 !! https://github.com/feiliuesmf/lanl_cice_cap
 !!
 !! @section References 
+!! 
+!! - [Los Alamos CICE Home Page] (http://oceans11.lanl.gov/trac/CICE)
+!! - [CICE User's Guide] (http://oceans11.lanl.gov/trac/CICE/attachment/wiki/WikiStart/cicedoc.pdf?format=raw)
 !!
 !!
 
