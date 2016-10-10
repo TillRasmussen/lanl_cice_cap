@@ -9,6 +9,8 @@
 !!
 !! @section Overview Overview
 !!
+!! **This CICE cap has been tested with versions 4.0 and 5.0.2 of CICE.**
+!!
 !! This document describes the CICE "cap", which is a small software layer that is 
 !! required when the [Los Alamos sea ice model] (http://oceans11.lanl.gov/trac/CICE) 
 !! is used in [National Unified Operation Prediction Capability] 
@@ -27,9 +29,11 @@
 !! when it's used in a NUOPC-based coupled system. 
 !! The term "cap" is used because it is a small software layer that sits on top 
 !! of model code, making calls into it and exposing model data structures in a 
-!! standard way. 
+!! standard way. For more information about creating NUOPC caps in general, please
+!! see the [Building a NUOPC Model] 
+!! (http://www.earthsystemmodeling.org/esmf_releases/non_public/ESMF_7_0_0/NUOPC_howtodoc/) 
+!! how-to document.
 !!
-!! **This CICE cap has been tested with versions 4.0 and 5.0.2 of CICE.**
 !!
 !! The CICE cap package contains a single Fortran source file and two makefiles. The Fortran
 !! source file (cice_cap.F90) implements a standard Fortran module that uses ESMF 
@@ -263,62 +267,70 @@
 !! The following tables list the import and export fields currently set up in the CICE cap.
 !!
 !! @subsection ImportFields Import Fields 
-!!  - inst_height_lowest                         
-!!  - inst_temp_height_lowest
-!!  - inst_spec_humid_height_lowest
-!!  - inst_zonal_wind_height_lowest
-!!  - inst_merid_wind_height_lowest
-!!  - inst_pres_height_lowest
-!!  - mean_down_lw_flx
-!!  - mean_down_sw_vis_dir_flx
-!!  - mean_down_sw_vis_dif_flx
-!!  - mean_down_sw_ir_dir_flx
-!!  - mean_down_sw_ir_dif_flx
-!!  - mean_prec_rate
-!!  - mean_fprec_rate
-!!  - sea_surface_temperature
-!!  - s_surf
-!!  - sea_lev
-!!  - sea_surface_slope_zonal
-!!  - sea_surface_slope_merid
-!!  - ocn_current_zonal
-!!  - ocn_current_merid
-!!  - freezing_melting_potential
-!!  - mixed_layer_depth
-!!  - mean_zonal_moment_flx
-!!  - mean_merid_moment_flx
-!!  - inst_surface_height
-!!  - inst_temp_height2m
-!!  - inst_spec_humid_height2m
-!!  - air_density_height_lowest
+!!
+!! Standard Name                     | Units      | Model Variable  | File         | Description                     | Notes
+!! ----------------------------------|------------|-----------------|--------------|---------------------------------|--------------------------------------
+!! air_density_height_lowest         | kg m-3     | rhoa            | ice_flux.F90 | air density                     | |
+!! freezing_melting_potential        | W m-2      | frzmlt          | ice_flux.F90 | freezing/melting potential      | |
+!! inst_height_lowest                | m          | zlvl            | ice_flux.F90 | height of lowest level          | |   
+!! inst_merid_wind_height_lowest     | m-2        | vatm            | ice_flux.F90 | wind v component                | [vector rotation applied] (@ref VectorRotations) 
+!! inst_pres_height_lowest           | Pa         | (none)          |              | pressure at lowest level        | used to calculate potT (potential temperature)
+!! inst_spec_humid_height_lowest     | kg kg-1    | Qa              | ice_flux.F90 | specific humidity               | |   
+!! inst_temp_height_lowest           | K          | Tair            | ice_flux.F90 | near surface air temperature    | |   
+!! inst_zonal_wind_height_lowest     | m-2        | uatm            | ice_flux.F90 | wind u component                | [vector rotation applied] (@ref VectorRotations) 
+!! mean_down_lw_flx                  | W m-2      | flw             | ice_flux.F90 | downward longwave flux          | |
+!! mean_down_sw_vis_dir_flx          | W m-2      | swvdr           | ice_flux.F90 | downward shortwave visible direct flux  | |
+!! mean_down_sw_vis_dif_flx          | W m-2      | swvdf           | ice_flux.F90 | downward shortwave visible diffuse flux | |
+!! mean_down_sw_ir_dir_flx           | W m-2      | swidr           | ice_flux.F90 | downward shortwave near infrared direct flux  | |
+!! mean_down_sw_ir_dif_flx           | W m-2      | swidf           | ice_flux.F90 | downward shortwave near infrared diffuse flux | |
+!! mean_fprec_rate                   | kg m-2 s-1 | fsnow           | ice_flux.F90 | snowfall rate                   | |     
+!! mean_prec_rate                    | kg m-2 s-1 | frain           | ice_flux.F90 | rainfall rate                   | |
+!! (none)                            | W m-2      | fsw             | ice_flux.F90 | downward shortwave flux         | cap sets fsw as sum of shortwave components
+!! ocn_current_merid                 | m-2        | vocn            | ice_flux.F90 | ocean current v component       | [vector rotation applied] (@ref VectorRotations) |
+!! ocn_current_zonal                 | m-2        | uocn            | ice_flux.F90 | ocean current u component       | [vector rotation applied] (@ref VectorRotations) |
+!! sea_surface_temperature           | C          | sst             | ice_flux.F90 | sea surface temperature         | converted from Kelvin to Celcius |
+!! s_surf                            | ppt        | sss             | ice_flux.F90 | sea surface salinity            | |
+!! sea_lev                           | m m-1      | ss_tltx, sstlty | ice_flux.F90 | sea surface slope in x & y      | sea_lev used to compute slope components, then [vector rotation applied] (@ref VectorRotations), then `t2ugrid_vectors()` called to move slope components to U grid
+!!
+!! These fields are advertised as imports but not currently used by the cap:
+!! - inst_surface_height
+!! - inst_temp_height2m
+!! - inst_spec_humid_height2m
+!! - mean_merid_moment_flx
+!! - mean_zonal_moment_flx
+!! - mixed_layer_depth
+!! - sea_surface_slope_zonal
+!! - sea_surface_slope_merid
 !!
 !! @subsection ExportField Export Fields
 !!
-!!  - sea_ice_temperature
-!!  - inst_ice_vis_dir_albedo
-!!  - inst_ice_ir_dir_albedo
-!!  - inst_ice_vis_dif_albedo
-!!  - inst_ice_ir_dif_albedo
-!!  - ice_mask
-!!  - ice_fraction
-!!  - stress_on_air_ice_zonal
-!!  - stress_on_air_ice_merid
-!!  - stress_on_ocn_ice_zonal
-!!  - stress_on_ocn_ice_merid
-!!  - mean_sw_pen_to_ocn
-!!  - mean_net_sw_vis_dir_flx
-!!  - mean_net_sw_vis_dif_flx
-!!  - mean_net_sw_ir_dir_flx
-!!  - mean_net_sw_ir_dif_flx
-!!  - mean_up_lw_flx_ice
-!!  - mean_sensi_heat_flx_atm_into_ice
-!!  - mean_laten_heat_flx_atm_into_ice
-!!  - mean_evap_rate_atm_into_ice
-!!  - mean_fresh_water_to_ocean_rate
-!!  - mean_salt_rate
-!!  - net_heat_flx_to_ocn
-!!  - mean_ice_volume
-!!  - mean_snow_volume
+!! Standard Name                     | Units      | Model Variable  | File          | Description                     | Notes
+!! ----------------------------------|------------|-----------------|---------------|---------------------------------|--------------------------------------
+!! ice_fraction                      | 1          | aice            | ice_state.F90 | concentration of ice            | |
+!! ice_mask                          |            | hm              | ice_grid.F90  | ice mask                        | 0.0 indicates land cell and 1.0 indicates ocean cell 
+!! inst_ice_ir_dif_albedo            | 1          | alidf           | ice_flux.F90  | near infrared diffuse albedo    | |
+!! inst_ice_ir_dir_albedo            | 1          | alidr           | ice_flux.F90  | near infrared direct albedo     | |
+!! inst_ice_vis_dif_albedo           | 1          | alvdf           | ice_flux.F90  | visible diffuse albedo          | |
+!! inst_ice_vis_dir_albedo           | 1          | advdr           | ice_flux.F90  | visible direct albedo           | |
+!! mean_evap_rate_atm_into_ice       | kg m-2 s-1 | evap            | ice_flux.F90  | evaporative water flux          | |
+!! mean_fresh_water_to_ocean_rate    | kg m-2 s-1 | fresh           | ice_flux.F90  | fresh water flux to ocean       | |
+!! mean_ice_volume                   | m          | vice            | ice_state.F90 | volume of ice per unit area     | |
+!! mean_laten_heat_flx_atm_into_ice  | W m-2      | flat            | ice_flux.F90  | latent heat flux                | | 
+!! mean_net_sw_ir_dif_flx            | W m-2      | fswthruidf      | ice_flux.F90  | near infrared diffuse shortwave penetrating to ocean  | |
+!! mean_net_sw_ir_dir_flx            | W m-2      | fswthruidr      | ice_flux.F90  | near infrared direct shortwave penetrating to ocean   | |
+!! mean_net_sw_vis_dif_flx           | W m-2      | fswthruvdf      | ice_flux.F90  | visible diffuse shortwave penetrating to ocean        | |
+!! mean_net_sw_vis_dir_flx           | W m-2      | fswthruvdr      | ice_flux.F90  | visible direct shortwave penetrating to ocean         | |
+!! mean_salt_rate                    | kg m-2 s-1 | fsalt           | ice_flux.F90  | salt flux to ocean              | |
+!! mean_sensi_heat_flx_atm_into_ice  | W m-2      | fsens           | ice_flux.F90  | sensible heat flux              | |
+!! mean_snow_volume                  | m          | vsno            | ice_state.F90 | volume of snow per unit area    | |
+!! mean_sw_pen_to_ocn                | W m-2      | fswthru         | ice_flux.F90  | shortwave penetrating to ocean  | |
+!! mean_up_lw_flx_ice                | W m-2      | flwout          | ice_flux.F90  | outgoing longwave radiation     | average over ice fraction only
+!! net_heat_flx_to_ocn               | W m-2      | fhocn           | ice_flux.F90  | net heat flux to ocean          | |
+!! sea_ice_temperature               | K          | trcr            | ice_state.F90 | surface temperature of ice/snow | Celcius converted to Kelvin for export
+!! stress_on_air_ice_merid           | N m-2      | strairyT        | ice_flux.F90  | y component of stress on ice by air  | [vector rotation applied] (@ref VectorRotations)
+!! stress_on_air_ice_zonal           | N m-2      | strairxT        | ice_flux.F90  | x component of stress on ice by air  | [vector rotation applied] (@ref VectorRotations)
+!! stress_on_ocn_ice_merid           | N m-2      | strocnyT        | ice_flux.F90  | y component of stress on ice by ocean  | [vector rotation applied] (@ref VectorRotations)
+!! stress_on_ocn_ice_zonal           | N m-2      | strocnxT        | ice_flux.F90  | x component of stress on ice by ocean  | [vector rotation applied] (@ref VectorRotations)
 !!
 !!
 !! @section BuildingAndInstalling Building and Installing
