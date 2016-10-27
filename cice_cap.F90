@@ -216,13 +216,8 @@
 !! the run, model fields are copied into the export `ESMF_State` so that NUOPC can
 !! transfer these fields to other models as required.
 !!
-!! The CICE cap implements a subroutine called `dumpCICEInternal` that writes
-!! the fields from ice_flux.F90 to NetCDF files. This is an optional method that
-!! allows the modeler to check the value of the fields and have a better idea of 
-!! the state of CICE. This is useful to determine the impact of import and export 
-!! Field connections made on the CICE model. Writing out of these fields during the
-!! run phase is controlled by the ESMF Attribute "DumpFields." This is read in
-!! during [InitializeP0] (@ref cice_cap_mod::initializep0). 
+!! Per field diagnostic output can be produced at the end of each run phase as
+!! described in the [I/O section] (@ref IO).
 !!
 !! @subsubsection VectorRotations Vector Rotations
 !!
@@ -332,6 +327,25 @@
 !! stress_on_ocn_ice_merid           | N m-2      | strocnyT        | ice_flux.F90  | y component of stress on ice by ocean  | [vector rotation applied] (@ref VectorRotations)
 !! stress_on_ocn_ice_zonal           | N m-2      | strocnxT        | ice_flux.F90  | x component of stress on ice by ocean  | [vector rotation applied] (@ref VectorRotations)
 !!
+!! @subsection MemoryManagement Memory Management
+!!
+!! For coupling fields, the CICE cap has the capability to either reference the internal 
+!! CICE data arrays directly, or to allow ESMF to allocate separate memory for the
+!! coupling fields.  Currently, the CICE cap is set up not to reference internal data
+!! arrays directly.  During the [ModelAdvance_Slow] (@ref cice_cap_mod::modeladvance_slow)
+!! phase, fields are copied from the import state into CICE internal data arrays.
+!! After the model integration timestep completes, internal data arrays are copied
+!! into the export state so they can be transferred for coupling.
+!!
+!! @subsection IO I/O
+!!
+!! The CICE cap implements a subroutine called `dumpCICEInternal` that writes
+!! the fields from ice_flux.F90 to NetCDF files. This is an optional diagnostic subroutine that
+!! allows the modeler to check the value of the fields and have a better idea of 
+!! the state of CICE at each coupling time interval. This is useful to determine the impact of import and export 
+!! Field connections made on the CICE model. Writing out of these fields during the
+!! run phase is controlled by the ESMF Attribute "DumpFields." This is read in
+!! during [InitializeP0] (@ref cice_cap_mod::initializep0). 
 !!
 !! @section BuildingAndInstalling Building and Installing
 !!
