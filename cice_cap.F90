@@ -381,8 +381,7 @@
 !! - [CICE User's Guide] (http://oceans11.lanl.gov/trac/CICE/attachment/wiki/WikiStart/cicedoc.pdf?format=raw)
 !!
 !!
-
-module cice_cap_mod
+module cice_cap_Mod
 
   use ice_blocks, only: nx_block, ny_block, nblocks_tot, block, get_block, &
                         get_block_parameter
@@ -1749,7 +1748,7 @@ module cice_cap_mod
   !! NUOPC_Advertise in a loop.
   !!
   !! @param state the ESMF_State object in which to advertise the fields
-  !! @param nfield number of fields
+  !! @param nfields number of fields
   !! @param field_defs an array of fld_list_type listing the fields to advertise
   !! @param rc return code
   subroutine CICE_AdvertiseFields(state, nfields, field_defs, rc)
@@ -2248,7 +2247,7 @@ module cice_cap_mod
   !> Writes out a diagnostic file containing field data named
   !! field_ice_internal_<fldname>.nc.
   !!
-  !! @param the ESMF_Grid on describing the field's grid
+  !! @param grid the ESMF_Grid on describing the field's grid
   !! @param slice time spice number
   !! @param stdname standard name of the field
   !! @param nop ignored for now
