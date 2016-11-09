@@ -232,6 +232,12 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
 
+    ! Initialize shortwave fields to 0 before calling CICE_Init
+    swidf = 0.0
+    swidr = 0.0
+    swvdf = 0.0
+    swvdr = 0.0
+
     call CICE_Initialize(mpi_comm)
 
     call CICE_AdvertiseFields(importState, fldsToIce_num, fldsToIce, rc)
