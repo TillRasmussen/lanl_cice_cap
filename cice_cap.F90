@@ -5,6 +5,8 @@
 !
 ! 5/10/13
 ! This is now acting as a cap/connector between NUOPC driver and LANL CICE code.
+! Author:  Anthony.Craig@gmail.com
+! Added cice grid code to match internal grid representation
 !
 
 module cice_cap_mod
@@ -1762,7 +1764,7 @@ module cice_cap_mod
 
     type(ESMF_Field)         :: field
     real(ESMF_KIND_R8), dimension(:,:), pointer  :: f2d
-    integer                  :: rc
+    integer                  :: rc, i, j
 
     if(.not. write_diagnostics) return ! remove this line to debug field connection
 
@@ -1780,7 +1782,11 @@ module cice_cap_mod
       file=__FILE__)) &
       return  ! bail out
 
-    f2d(:,:) = farray(:,:,1)
+    do j = lbound(f2d,2),ubound(f2d,2)
+     do i = lbound(f2d,1),ubound(f2d,1)
+      f2d(i,j) = farray(i+1,j+1,1)
+     enddo
+    enddo
 
     call ESMF_FieldWrite(field, fileName='field_ice_internal_'//trim(stdname)//'.nc', &
       timeslice=slice, rc=rc) 
